@@ -100,32 +100,9 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  // Auth persistence
-  useEffect(() => {
-    const savedUserStr = localStorage.getItem('pods_current_user');
-    if (savedUserStr) {
-      try {
-        const savedUser: User = JSON.parse(savedUserStr);
-        // Sync current user with latest system user data
-        const latest = systemUsers.find(u => u.id === savedUser.id);
-        if (latest) {
-          if (latest.status !== 'active' && latest.role !== 'sysadmin') {
-            handleLogout();
-          } else if (latest.isLocked) {
-             handleLogout();
-          } else {
-            setCurrentUser(latest);
-          }
-        }
-      } catch (e) {
-        localStorage.removeItem('pods_current_user');
-      }
-    }
-  }, [systemUsers]);
-
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    localStorage.setItem('pods_current_user', JSON.stringify(user));
+    // Don't persist login to localStorage - users must login each session
   };
 
   const handleLogout = () => {

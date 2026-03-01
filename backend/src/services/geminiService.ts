@@ -24,13 +24,26 @@ Always consider the hierarchy:
 const getAI = () => {
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is not set. Chat will not be available.');
+    console.warn('[geminiService] GEMINI_API_KEY not set - chat will work in demo mode');
+    return null;
   }
   return new GoogleGenAI({ apiKey });
 };
 
-export const startChat = (history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []): Chat => {
+export const startChat = (history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []): Chat | any => {
   const ai = getAI();
+  if (!ai) {
+    // Return a mock chat object for demo mode
+    console.log('[geminiService] Starting chat in demo mode (no API key)');
+    return {
+      _isDemoMode: true,
+      sendMessage: async (msg: string) => {
+        return {
+          text: "Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.",
+        };
+      },
+    } as any;
+  }
   return ai.chats.create({
     model: 'gemini-3.1-pro-preview',
     config: {
@@ -40,10 +53,14 @@ export const startChat = (history: { role: 'user' | 'model'; parts: { text: stri
   });
 };
 
-export const sendMessage = async (chat: Chat, message: string): Promise<string> => {
+export const sendMessage = async (chat: Chat | any, message: string): Promise<string> => {
   try {
+    // Handle demo mode
+    if (chat._isDemoMode) {
+      return "Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.";
+    }
+    
     const result: GenerateContentResponse = await chat.sendMessage({ message });
-    // Fix: text is a property, not a method
     return result.text || "No response from AI.";
   } catch (error) {
     console.error("Gemini API Error:", error);
@@ -56,6 +73,10 @@ export const sendMessage = async (chat: Chat, message: string): Promise<string> 
 
 export const fetchRealtimeData = async () => {
   const ai = getAI();
+  if (!ai) {
+    console.log('[geminiService] fetchRealtimeData: Demo mode, returning null');
+    return null;
+  }
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-pro-preview",
