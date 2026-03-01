@@ -1,10 +1,18 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { getProducts, getProductById, getRoutes, getRouteById, updateProduct } from '../db.js';
+import {
+  validateRequestParams,
+  validateRequestBody,
+  updateProductSchema,
+  uuidParamSchema,
+} from '../middleware/validation.js';
+import { apiLimiter, strictLimiter } from '../middleware/rateLimiter.js';
 
 export const dataRouter = Router();
 
 // Get all products
-dataRouter.get('/products', async (req: Request, res: Response) => {
+dataRouter.get('/products', apiLimiter, async (req: Request, res: Response) => {
   try {
     const products = await getProducts();
     res.json({ products });
@@ -15,34 +23,45 @@ dataRouter.get('/products', async (req: Request, res: Response) => {
 });
 
 // Get single product
-dataRouter.get('/products/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const product = await getProductById(id);
-    if (!product) {
-      return res.status(404).json({ error: 'Product not found' });
+dataRouter.get(
+  '/products/:id',
+  apiLimiter,
+  validateRequestParams(uuidParamSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const product = await getProductById(id);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      res.json({ product });
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      res.status(500).json({ error: 'Failed to fetch product' });
     }
-    res.json({ product });
-  } catch (error) {
-    console.error('Error fetching product:', error);
-    res.status(500).json({ error: 'Failed to fetch product' });
   }
-});
+);
 
-// Update product
-dataRouter.put('/products/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const product = await updateProduct(id, req.body);
-    res.json({ product });
-  } catch (error) {
-    console.error('Error updating product:', error);
-    res.status(500).json({ error: 'Failed to update product' });
+// Update product - with validation and rate limiting
+dataRouter.put(
+  '/products/:id',
+  strictLimiter,
+  validateRequestParams(uuidParamSchema),
+  validateRequestBody(updateProductSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const product = await updateProduct(id, req.body);
+      res.json({ product });
+    } catch (error) {
+      console.error('Error updating product:', error);
+      res.status(500).json({ error: 'Failed to update product' });
+    }
   }
-});
+);
 
 // Get all freight routes
-dataRouter.get('/routes', async (req: Request, res: Response) => {
+dataRouter.get('/routes', apiLimiter, async (req: Request, res: Response) => {
   try {
     const routes = await getRoutes();
     res.json({ routes });
@@ -53,16 +72,21 @@ dataRouter.get('/routes', async (req: Request, res: Response) => {
 });
 
 // Get single route
-dataRouter.get('/routes/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const route = await getRouteById(id);
-    if (!route) {
-      return res.status(404).json({ error: 'Route not found' });
+dataRouter.get(
+  '/routes/:id',
+  apiLimiter,
+  validateRequestParams(uuidParamSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const route = await getRouteById(id);
+      if (!route) {
+        return res.status(404).json({ error: 'Route not found' });
+      }
+      res.json({ route });
+    } catch (error) {
+      console.error('Error fetching route:', error);
+      res.status(500).json({ error: 'Failed to fetch route' });
     }
-    res.json({ route });
-  } catch (error) {
-    console.error('Error fetching route:', error);
-    res.status(500).json({ error: 'Failed to fetch route' });
   }
-});
+);

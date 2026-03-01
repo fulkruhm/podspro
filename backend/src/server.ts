@@ -5,15 +5,44 @@ import { chatRouter } from './routes/chatRoutes.js';
 import { anomalyRouter } from './routes/anomalyRoutes.js';
 import { dataRouter } from './routes/dataRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
+import { authRouter } from './routes/authRoutes.js';
+import { securityHeaders, sanitizeInput } from './middleware/security.js';
+import { apiLimiter } from './middleware/rateLimiter.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security middleware
+app.use(securityHeaders);
+
+// CORS configuration - only allow trusted origins
+const allowedOrigins: string[] = [
+  'http://localhost:3000',
+  'http://localhost:5173', // Vite dev server
+];
+
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Body parser with size limits
+app.use(express.json({ limit: '10kb' })); // Limit request body size
+app.use(express.urlencoded({ limit: '10kb', extended: true }));
+
+// Input sanitization
+app.use(sanitizeInput);
+
+// Rate limiting on all routes
+app.use(apiLimiter);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -21,17 +50,26 @@ app.get('/api/health', (req, res) => {
 });
 
 // Routes
+app.use('/api/auth', authRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/anomalies', anomalyRouter);
 app.use('/api/data', dataRouter);
 app.use('/api/users', userRouter);
 
-// Error handling middleware
+// Error handling middleware - never expose internal errors to client
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+
+  // Don't expose internal error details to client
+  const status = err.status || 500;
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Internal server error'
+    : err.message;
+
+  res.status(status).json({ error: message });
 });
 
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });

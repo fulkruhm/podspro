@@ -1,5 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
+import { getProducts, getRoutes } from '../db.js';
 
 const SYSTEM_PROMPT = `
 # PODS (Predictive Order & Demand Solutions) AI Assistant
@@ -73,10 +74,61 @@ export const sendMessage = async (chat: Chat | any, message: string): Promise<st
 
 export const fetchRealtimeData = async () => {
   const ai = getAI();
+  
+  // If no API key, return current database data as fallback
   if (!ai) {
-    console.log('[geminiService] fetchRealtimeData: Demo mode, returning null');
-    return null;
+    console.log('[geminiService] fetchRealtimeData: No API key, returning database data');
+    try {
+      const products = await getProducts();
+      const routes = await getRoutes();
+      
+      // Map database format to frontend format
+      const mappedProducts = products.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        currentStock: parseInt(p.current_stock) || 0,
+        avgDailyDemand: parseFloat(p.avg_daily_demand) || 0,
+        leadTime: p.lead_time || 0,
+        safetyStock: p.safety_stock || 0,
+        reorderPoint: p.reorder_point || 0,
+        status: p.status || 'optimal',
+        category: p.category || '',
+        price: parseFloat(p.price) || 0,
+        region: p.region || '',
+        store: p.store || '',
+        department: p.department || '',
+        historicalDemand: p.historical_demand,
+        imageUrl: p.image_url,
+        shrinkRate: parseFloat(p.shrink_rate) || 0,
+        markdownRate: parseFloat(p.markdown_rate) || 0,
+        oosDays: p.oos_days || 0,
+        turnoverRate: parseFloat(p.turnover_rate) || 0,
+        lastRestockDate: p.last_restock_date,
+        forecastedDemand: p.forecasted_demand,
+      }));
+
+      const mappedRoutes = routes.map((r: any) => ({
+        id: r.id,
+        origin: r.origin,
+        destination: r.destination,
+        currentRate: parseFloat(r.current_rate) || 0,
+        trend: (r.trend || 'stable'),
+        capacity: (r.capacity || 'moderate'),
+        riskLevel: (r.risk_level || 'low'),
+        historicalRates: r.historical_rates || [],
+      }));
+
+      return {
+        products: mappedProducts,
+        routes: mappedRoutes,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('[geminiService] Error fetching fallback data:', error);
+      return null;
+    }
   }
+  
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-pro-preview",

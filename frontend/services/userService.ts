@@ -1,6 +1,7 @@
 // Frontend service for user management
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+// Use relative paths to work with nginx proxy
+const API_BASE_URL = '/api';
 
 // Map database snake_case fields to frontend camelCase
 function mapUserFromDB(dbUser: any) {

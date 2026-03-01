@@ -1,6 +1,6 @@
 
 // Frontend Gemini service - calls the backend API instead of Gemini directly
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 // Chat session management
 let currentSessionId: string | null = null;

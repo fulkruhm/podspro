@@ -1,5 +1,6 @@
 // Frontend API service - calls the backend instead of Gemini directly
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+// Use relative paths to work with nginx proxy
+const API_BASE_URL = '/api';
 
 // Chat session management
 const chatSessions: Map<string, string> = new Map();

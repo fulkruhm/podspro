@@ -31,99 +31,58 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, systemUsers, onUpdateUse
   const [isLoading, setIsLoading] = useState(false);
   const [showDemoHint, setShowDemoHint] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    setTimeout(() => {
-      const user = systemUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+    try {
+      // Call backend login endpoint via relative path (proxied by nginx)
+      console.log('[LoginView] Attempting login...');
       
-      if (user) {
-        if (user.isLocked) {
-          setError('Security Override: Account locked due to 10 failed login attempts. Contact SysAdmin.');
-          setIsLoading(false);
-          addAuditLog({
-            userId: user.id,
-            userName: user.name,
-            action: 'LOGIN_LOCKED',
-            details: `Locked account login attempt for @${user.username}`,
-            category: 'auth',
-            severity: 'warning'
-          });
-          return;
-        }
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
 
-        if (user.status !== 'active' && user.username !== 'sysadmin') {
-          setError(`Account is ${user.status}. Contact your administrator.`);
-          setIsLoading(false);
-          addAuditLog({
-            userId: user.id,
-            userName: user.name,
-            action: 'LOGIN_INACTIVE',
-            details: `Inactive account login attempt for @${user.username} (Status: ${user.status})`,
-            category: 'auth',
-            severity: 'info'
-          });
-          return;
-        }
+      console.log('[LoginView] Response status:', response.status);
 
-        if (password === user.password) {
-          onUpdateUser(user.id, { failedLoginAttempts: 0 });
-          onLogin(user);
-          addAuditLog({
-            userId: user.id,
-            userName: user.name,
-            action: 'LOGIN_SUCCESS',
-            details: `Successful login for @${user.username}`,
-            category: 'auth',
-            severity: 'info'
-          });
-        } else {
-          const attempts = (user.failedLoginAttempts || 0) + 1;
-          const isNowLocked = attempts >= 10;
-          
-          onUpdateUser(user.id, { 
-            failedLoginAttempts: attempts,
-            isLocked: isNowLocked
-          });
-
-          if (isNowLocked) {
-            setError('Account locked: 10 failed attempts reached. Unauthorized access protocol engaged.');
-            addAuditLog({
-              userId: user.id,
-              userName: user.name,
-              action: 'ACCOUNT_LOCKED',
-              details: `Account locked for @${user.username} after 10 failed attempts`,
-              category: 'security',
-              severity: 'critical'
-            });
-          } else {
-            setError(`Invalid pass-token. Attempts remaining: ${10 - attempts}`);
-            addAuditLog({
-              userId: user.id,
-              userName: user.name,
-              action: 'LOGIN_FAILURE',
-              details: `Failed login attempt for @${user.username} (Attempt ${attempts}/10)`,
-              category: 'auth',
-              severity: 'warning'
-            });
-          }
-          setIsLoading(false);
-        }
+      if (response.ok) {
+        const data = await response.json();
+        const user = data.user;
+        console.log('[LoginView] Login successful for user:', user.username);
+        
+        onLogin(user);
+        addAuditLog({
+          userId: user.id,
+          userName: user.name,
+          action: 'LOGIN_SUCCESS',
+          details: `Successful login for @${user.username}`,
+          category: 'auth',
+          severity: 'info'
+        });
       } else {
-        setError('System handle not found.');
-        setIsLoading(false);
+        const errorData = await response.json();
+        console.log('[LoginView] Login failed:', errorData);
+        setError(errorData.error || 'Login failed');
+        
         addAuditLog({
           userId: 'unknown',
           userName: 'Unknown User',
-          action: 'LOGIN_UNKNOWN',
-          details: `Login attempt with unknown handle: ${username}`,
+          action: 'LOGIN_FAILURE',
+          details: `Login attempt failed for @${username}: ${errorData.error}`,
           category: 'auth',
           severity: 'warning'
         });
       }
-    }, 800);
+    } catch (error) {
+      console.error('[LoginView] Connection error:', error);
+      setError('Connection error. Unable to authenticate.');
+      console.error('Login error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
