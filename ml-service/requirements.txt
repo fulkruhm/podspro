@@ -1,0 +1,13 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+numpy==1.26.3
+pandas==2.1.4
+scikit-learn==1.3.2
+python-dateutil==2.8.2
+
+# Optional but recommended for future expansion:
+# tensorflow==2.15.0
+# torch==2.1.1
+# mlflow==2.9.1
+# optuna==3.15.0

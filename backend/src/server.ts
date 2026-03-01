@@ -6,6 +6,7 @@ import { anomalyRouter } from './routes/anomalyRoutes.js';
 import { dataRouter } from './routes/dataRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
 import { authRouter } from './routes/authRoutes.js';
+import { mlRouter } from './routes/mlRoutes.js';
 import { securityHeaders, sanitizeInput } from './middleware/security.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 
@@ -55,6 +56,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/anomalies', anomalyRouter);
 app.use('/api/data', dataRouter);
 app.use('/api/users', userRouter);
+app.use('/api/ml', mlRouter);
 
 // Error handling middleware - never expose internal errors to client
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

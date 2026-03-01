@@ -98,9 +98,43 @@ Detects:
 |---|---|
 | **Frontend** | React 18, TypeScript, Tailwind CSS, Recharts |
 | **Backend** | Node.js, Express.js, TypeScript REST API |
+| **ML Service** | Python, FastAPI, scikit-learn, pandas, numpy |
 | **Database** | PostgreSQL — transactional storage, analytical querying, anomaly history |
 | **AI Layer** | Google Gemini — context-aware operational reasoning |
 | **Infrastructure** | Docker, Docker Compose, Nginx reverse proxy |
+
+---
+
+## 🏛️ Hybrid Architecture (Node.js + Python)
+
+PODS uses a **microservice architecture** combining the strengths of both ecosystems:
+
+```
+React Frontend  ──┐
+                  │
+             Node.js Backend (Port 3001)         Python ML Service (Port 5000)
+             ┌────────────────────────┐          ┌──────────────────────┐
+             │  • Authentication      │          │  • Anomaly Detection │
+             │  • User Management     │  ──────▶ │  • Forecasting       │
+             │  • Data APIs           │          │  • ML Analytics      │
+             │  • Chat with Gemini    │          │  • scikit-learn      │
+             └────────────────────────┘          └──────────────────────┘
+                     │
+                     ▼
+              PostgreSQL Database
+```
+
+**Why This Approach?**
+
+| Aspect | Benefit |
+|--------|---------|
+| **HTTP APIs** | Node.js excels at I/O, auth, routing, REST endpoints |
+| **ML/Data Science** | Python has scikit-learn, TensorFlow, pandas, numpy ecosystem |
+| **Independent Scaling** | Scale ML separately for compute-intensive operations |
+| **Developer Experience** | Data scientists work in Python, full-stack devs in Node.js |
+| **Production Ready** | Both containerized, orchestrated with Docker Compose |
+
+**See:** [ML Service API Docs](ML_SERVICE_API.md)
 
 ---
 
@@ -169,10 +203,37 @@ docker-compose up --build
 Access:
 - **Frontend**: http://localhost:5173
 - **API**: http://localhost:3001/api
+- **ML Service**: http://localhost:5000 *(internal)*
 - **Nginx Proxy**: http://localhost (port 80)
 
+### Demo Credentials
+
+| Username | Password | Role |
+|---|---|---|
+| `matt` | `matt` | System Admin |
+| `logistics_user` | `pass` | Logistics Analyst |
+| `main_st_user` | `pass` | Store Manager (Main St. Market) |
+
+---
 
 ## ✨ Recent Features & Improvements
+
+### Python ML Microservice 🐍
+- **Hybrid Architecture**: FastAPI microservice for ML/AI alongside Node.js backend
+- **Anomaly Detection**: Isolation Forest for inventory anomalies with explainable results
+- **Demand Forecasting**: Exponential smoothing with trend analysis and confidence intervals
+- **Ready for TensorFlow**: Pre-configured for deep learning model integration
+- **Scalable**: Python service scales independently for compute-intensive operations
+
+**Endpoints:**
+```
+POST   /api/ml/anomalies/detect    — Detect inventory anomalies
+POST   /api/ml/forecast             — Forecast future demand
+POST   /api/ml/batch-analysis       — Run multiple analyses
+GET    /api/ml/health               — Check ML service status
+```
+
+[Full ML API Documentation](ML_SERVICE_API.md)
 
 ### User Management & Provisioning
 - **Store-based access control**: Store Managers automatically scoped to assigned store
@@ -253,10 +314,16 @@ GET   /api/data/routes         — Logistics routes with shipment status
 - [x] Store-based user scoping for Store Managers
 - [x] Real-time data sync with database fallback
 - [x] User provisioning with audit logging
-- [x] Anomaly detection framework
+- [x] Anomaly detection framework (Isolation Forest)
+- [x] Demand forecasting engine (Exponential Smoothing)
+- [x] Python ML microservice (FastAPI + scikit-learn)
+- [x] Hybrid Node.js + Python architecture
 
 **In Progress**
 - [ ] Frontend store filtering and view isolation
+- [ ] ML model versioning and A/B testing (MLflow)
+- [ ] Advanced time series forecasting (Prophet, ARIMA)
+- [ ] Feature exporters for Jupyter notebooks
 - [ ] Advanced permission matrix customization
 - [ ] Audit log dashboard and export
 
