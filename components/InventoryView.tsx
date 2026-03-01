@@ -3,18 +3,28 @@ import React from 'react';
 import { Product } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area } from 'recharts';
 import { detectInventoryAnomalies, InventoryAnomaly } from '../services/anomalyService';
+import ProductDetailView from './ProductDetailView';
 
 interface InventoryViewProps {
   triggerQuery: (query: string) => void;
   products: Product[];
   onClose: () => void;
+  onUpdateProduct: (productId: string, updates: Partial<Product>) => void;
 }
 
-const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, onClose }) => {
+const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, onClose, onUpdateProduct }) => {
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<Product['status'] | 'all'>('all');
   const [anomalies, setAnomalies] = React.useState<InventoryAnomaly[]>([]);
   const [isDetecting, setIsDetecting] = React.useState(false);
+
+  // Sync selected product if the underlying data changes
+  React.useEffect(() => {
+    if (selectedProduct) {
+      const updated = products.find(p => p.id === selectedProduct.id);
+      if (updated) setSelectedProduct(updated);
+    }
+  }, [products]);
 
   const filteredProducts = statusFilter === 'all' 
     ? products 
@@ -140,8 +150,8 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, o
         color: 'text-amber-700 bg-amber-50 border-amber-100'
       });
     }
-    if (products.some(p => p.status === 'excess')) {
-      const excessCount = products.filter(p => p.status === 'excess').length;
+    if (products.some(p => p.status.toLowerCase() === 'excess')) {
+      const excessCount = products.filter(p => p.status.toLowerCase() === 'excess').length;
       insights.push({
         title: 'Capital Optimization',
         desc: `${excessCount} SKUs show excess stock. Consider promotional markdowns to free capital.`,
@@ -151,6 +161,17 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, o
     }
     return insights;
   };
+
+  if (selectedProduct) {
+    return (
+      <ProductDetailView 
+        product={selectedProduct} 
+        onClose={() => setSelectedProduct(null)} 
+        triggerQuery={triggerQuery}
+        onUpdateProduct={onUpdateProduct}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4 md:space-y-6 relative">

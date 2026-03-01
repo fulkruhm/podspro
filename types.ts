@@ -32,6 +32,14 @@ export interface Product {
   store: string;
   department: string;
   historicalDemand?: number[]; // Last 14 days
+  // New Analyst fields
+  imageUrl?: string;
+  shrinkRate?: number; // percentage
+  markdownRate?: number; // percentage
+  oosDays?: number; // days out of stock in last 30 days
+  turnoverRate?: number;
+  lastRestockDate?: string;
+  forecastedDemand?: number[]; // Next 7 days
 }
 
 export interface FreightRoute {

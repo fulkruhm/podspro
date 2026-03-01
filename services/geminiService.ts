@@ -35,7 +35,7 @@ export const fetchRealtimeData = async () => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: "Generate a realistic supply chain scenario for a grocery retail chain. Create 15 products distributed across 3 regions (North, South, West), 5 different stores, and departments like Produce, Dairy, Bakery, Meat, Frozen, Beverages, and Pantry. Ensure no electronics or non-grocery items. Vary the stock levels to show a mix of optimal, low, excess, and critical statuses. IMPORTANT: For each product, provide 14 days of realistic historicalDemand. For each route, provide 12 weeks of realistic historicalRates to enable trend visualization.",
+      contents: "Generate a realistic supply chain scenario for a grocery retail chain. Create 15 products distributed across 3 regions (North, South, West), 5 different stores, and departments like Produce, Dairy, Bakery, Meat, Frozen, Beverages, and Pantry. Ensure no electronics or non-grocery items. Vary the stock levels to show a mix of optimal, low, excess, and critical statuses. IMPORTANT: For each product, provide 7 days of realistic historicalDemand, a relevant picsum.photos imageUrl, shrinkRate (0-10%), markdownRate (0-20%), oosDays (0-10), turnoverRate, and 7 days of forecastedDemand. For each route, provide 12 weeks of realistic historicalRates to enable trend visualization.",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -63,6 +63,17 @@ export const fetchRealtimeData = async () => {
                     type: Type.ARRAY,
                     items: { type: Type.NUMBER },
                     description: "Last 14 days of demand"
+                  },
+                  imageUrl: { type: Type.STRING, description: "A picsum.photos URL with a relevant seed" },
+                  shrinkRate: { type: Type.NUMBER, description: "Percentage of inventory lost to shrink" },
+                  markdownRate: { type: Type.NUMBER, description: "Percentage of inventory marked down" },
+                  oosDays: { type: Type.NUMBER, description: "Days out of stock in last 30 days" },
+                  turnoverRate: { type: Type.NUMBER },
+                  lastRestockDate: { type: Type.STRING },
+                  forecastedDemand: {
+                    type: Type.ARRAY,
+                    items: { type: Type.NUMBER },
+                    description: "Next 7 days of forecasted demand"
                   }
                 },
                 required: ['id', 'name', 'currentStock', 'avgDailyDemand', 'leadTime', 'safetyStock', 'reorderPoint', 'status', 'category', 'price', 'region', 'store', 'department']

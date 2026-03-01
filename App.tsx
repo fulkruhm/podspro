@@ -29,10 +29,18 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(() => {
+    const saved = localStorage.getItem('pods_products');
+    return saved ? JSON.parse(saved) : MOCK_PRODUCTS;
+  });
   const [routes, setRoutes] = useState<FreightRoute[]>(MOCK_ROUTES);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(Date.now());
+
+  // Persist products whenever they change
+  useEffect(() => {
+    localStorage.setItem('pods_products', JSON.stringify(products));
+  }, [products]);
 
   // Persist system users whenever they change
   useEffect(() => {
@@ -189,6 +197,10 @@ const App: React.FC = () => {
     );
   }
 
+  const handleUpdateProduct = (productId: string, updates: Partial<Product>) => {
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, ...updates } : p));
+  };
+
   const renderContent = () => {
     const showFilter = ['dashboard', 'inventory'].includes(activeTab);
 
@@ -215,7 +227,12 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'inventory' && (
-          <InventoryView triggerQuery={triggerAssistantQuery} products={filteredProducts} onClose={goBackToDashboard} />
+          <InventoryView 
+            triggerQuery={triggerAssistantQuery} 
+            products={filteredProducts} 
+            onClose={goBackToDashboard} 
+            onUpdateProduct={handleUpdateProduct}
+          />
         )}
         {activeTab === 'logistics' && (currentUser.role === 'admin' || currentUser.role === 'sysadmin' || currentUser.role === 'logistics_user') && (
           <LogisticsView triggerQuery={triggerAssistantQuery} routes={routes} onClose={goBackToDashboard} />

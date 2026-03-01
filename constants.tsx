@@ -22,9 +22,39 @@ Always consider the hierarchy:
 
 export const MOCK_PRODUCTS: Product[] = [
   // NORTH - MAIN ST. MARKET
-  { id: '1', name: 'Organic Whole Milk (1 Gal)', currentStock: 45, avgDailyDemand: 15, leadTime: 2, safetyStock: 10, reorderPoint: 40, status: 'optimal', category: 'Dairy', price: 5.99, region: 'North', store: 'Main St. Market', department: 'Dairy', historicalDemand: [12, 14, 15, 18, 16, 14, 15, 17, 19, 20, 18, 16, 15, 17] },
-  { id: '2', name: 'Almond Butter (16oz)', currentStock: 8, avgDailyDemand: 4, leadTime: 5, safetyStock: 12, reorderPoint: 32, status: 'critical', category: 'Pantry', price: 12.50, region: 'North', store: 'Main St. Market', department: 'Pantry', historicalDemand: [3, 4, 5, 4, 3, 4, 5, 6, 5, 4, 5, 6, 7, 8] },
-  { id: '3', name: 'Honeycrisp Apples (5lb)', currentStock: 15, avgDailyDemand: 12, leadTime: 3, safetyStock: 10, reorderPoint: 46, status: 'critical', category: 'Produce', price: 7.99, region: 'North', store: 'Main St. Market', department: 'Produce', historicalDemand: [10, 12, 11, 13, 15, 14, 16, 18, 17, 19, 20, 22, 21, 23] },
+  { 
+    id: '1', name: 'Organic Whole Milk (1 Gal)', currentStock: 45, avgDailyDemand: 15, leadTime: 2, safetyStock: 10, reorderPoint: 40, status: 'optimal', category: 'Dairy', price: 5.99, region: 'North', store: 'Main St. Market', department: 'Dairy', 
+    historicalDemand: [16, 14, 15, 17, 19, 20, 18],
+    imageUrl: 'https://picsum.photos/seed/milk/800/800',
+    shrinkRate: 1.2,
+    markdownRate: 0.5,
+    oosDays: 0,
+    turnoverRate: 12.5,
+    lastRestockDate: '2026-02-25',
+    forecastedDemand: [16, 18, 15, 17, 19, 20, 18]
+  },
+  { 
+    id: '2', name: 'Almond Butter (16oz)', currentStock: 8, avgDailyDemand: 4, leadTime: 5, safetyStock: 12, reorderPoint: 32, status: 'critical', category: 'Pantry', price: 12.50, region: 'North', store: 'Main St. Market', department: 'Pantry', 
+    historicalDemand: [5, 4, 5, 6, 7, 8, 9],
+    imageUrl: 'https://picsum.photos/seed/almond/800/800',
+    shrinkRate: 0.2,
+    markdownRate: 0,
+    oosDays: 5,
+    turnoverRate: 4.2,
+    lastRestockDate: '2026-02-10',
+    forecastedDemand: [9, 10, 8, 7, 9, 11, 10]
+  },
+  { 
+    id: '3', name: 'Honeycrisp Apples (5lb)', currentStock: 15, avgDailyDemand: 12, leadTime: 3, safetyStock: 10, reorderPoint: 46, status: 'critical', category: 'Produce', price: 7.99, region: 'North', store: 'Main St. Market', department: 'Produce', 
+    historicalDemand: [18, 17, 19, 20, 22, 21, 23],
+    imageUrl: 'https://picsum.photos/seed/apple/800/800',
+    shrinkRate: 8.5,
+    markdownRate: 15.0,
+    oosDays: 2,
+    turnoverRate: 18.0,
+    lastRestockDate: '2026-02-26',
+    forecastedDemand: [25, 28, 30, 26, 24, 27, 29]
+  },
   { id: '4', name: 'Free Range Chicken Breast', currentStock: 22, avgDailyDemand: 8, leadTime: 2, safetyStock: 6, reorderPoint: 22, status: 'low', category: 'Meat', price: 14.99, region: 'North', store: 'Main St. Market', department: 'Meat', historicalDemand: [7, 8, 9, 8, 7, 8, 9, 10, 9, 8, 9, 10, 11, 12] },
 
   // NORTH - UPTOWN GROCERS
