@@ -1,9 +1,33 @@
 
 import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
-import { SYSTEM_PROMPT } from "../constants";
 
-// Fix: Use direct process.env.API_KEY for initialization as per guidelines
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+const SYSTEM_PROMPT = `
+# PODS (Predictive Order & Demand Solutions) AI Assistant
+## System Identity & Core Mission
+You are an advanced supply chain optimization platform specifically designed for **Multi-Store Grocery Retail Groups**. You manage a hierarchy of Regions, Stores, Departments, and Products.
+
+## Context: Hierarchical Grocery Retail
+Always consider the hierarchy:
+1. **Region**: (North, South, West)
+2. **Store**: (Main St. Market, Uptown Grocers, Lakeside Foods, River Walk Grocers, Coastal Foods)
+3. **Department**: (Produce, Dairy, Bakery, Pantry, Meat, Frozen, Beverages)
+4. **Product**: Individual grocery items.
+
+## Analysis Rules
+- **Perishability**: Short shelf-life for produce/dairy affects Safety Stock.
+- **Aggregation**: Be able to summarize metrics at the store or regional level.
+- **ROP Formula**: ROP = (Daily Demand × Lead Time) + Safety Stock.
+- **Safety Stock**: Use service level targets (95-99%).
+`;
+
+// Use either API_KEY or GEMINI_API_KEY environment variable
+const getAI = () => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY environment variable is not set. Chat will not be available.');
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const startChat = (history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []): Chat => {
   const ai = getAI();

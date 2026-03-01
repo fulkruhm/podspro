@@ -3,7 +3,7 @@
 
 # PODS — Predictive Order & Demand Solutions
 
-**An AI-powered supply chain management platform built with React + Gemini**
+**An AI-powered supply chain management platform with React Frontend + Express Backend**
 
 </div>
 
@@ -11,7 +11,13 @@
 
 ## Overview
 
-PODS is a full-featured inventory, logistics, and demand forecasting dashboard powered by Google Gemini AI. It supports multi-store operations with role-based access control, real-time data refresh, an AI advisor assistant, and anomaly detection across your supply chain.
+PODS is a full-featured, production-ready supply chain platform with:
+- **React Frontend** (Vite, TypeScript, Tailwind)
+- **Express Backend** (Node.js, TypeScript)
+- **Google Gemini AI** integration for intelligent analysis
+- **Monorepo structure** for easy deployment and development
+
+It supports multi-store operations with role-based access control, real-time data, an AI advisor assistant, and automated anomaly detection.
 
 ## Features
 
@@ -28,26 +34,167 @@ PODS is a full-featured inventory, logistics, and demand forecasting dashboard p
 
 ## Tech Stack
 
-- **Frontend:** React 18, TypeScript, Tailwind CSS, Vite
-- **AI:** Google Gemini API (`@google/generative-ai`)
-- **State:** React hooks + localStorage persistence
+### Frontend
+- **React 18** with TypeScript
+- **Vite** for fast development and optimized builds
+- **Tailwind CSS** for styling
+- **Recharts** for data visualization
+
+### Backend
+- **Express.js** REST API
+- **TypeScript** for type safety
+- **Google Gemini API** for AI capabilities
+- **CORS** enabled for frontend communication
 
 ---
 
-## Run Locally
+## Project Structure
 
-**Prerequisites:** Node.js 18+
+```
+.
+├── frontend/           # React application
+│   ├── components/    # React components
+│   ├── services/      # API client services
+│   ├── App.tsx
+│   └── package.json
+├── backend/           # Express API server
+│   ├── src/
+│   │   ├── routes/   # API routes
+│   │   ├── services/ # Business logic
+│   │   └── server.ts
+│   └── package.json
+├── docker-compose.yml
+└── package.json       # Root monorepo
+```
 
-1. Clone the repo:
+For detailed structure, see [STRUCTURE.md](./STRUCTURE.md)
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- Google Gemini API key
+
+### Installation
+
+1. **Clone and install:**
    ```bash
    git clone https://github.com/fulkruhm/podspro.git
    cd podspro
-   ```
-
-2. Install dependencies:
-   ```bash
    npm install
    ```
+
+2. **Configure environment:**
+   
+   `frontend/.env`:
+   ```env
+   VITE_API_BASE_URL=http://localhost:5000/api
+   ```
+
+   `backend/.env`:
+   ```env
+   PORT=5000
+   GEMINI_API_KEY=your_api_key_here
+   NODE_ENV=development
+   ```
+
+3. **Run development servers:**
+   ```bash
+   npm run dev
+   ```
+   
+   Or run separately:
+   ```bash
+   npm run frontend:dev   # Terminal 1
+   npm run backend:dev    # Terminal 2
+   ```
+
+4. **Open browser:**
+   - Frontend: http://localhost:3000
+   - API: http://localhost:5000/api
+
+### Docker Deployment
+
+```bash
+docker-compose up --build
+```
+
+Access:
+- Frontend: http://localhost:80 (or :8080)
+- Backend API: http://localhost:5000
+
+---
+
+## Development
+
+### Build for Production
+
+```bash
+npm run build
+```
+
+This builds both frontend (optimized React bundle) and backend (compiled TypeScript).
+
+### Running Tests
+
+```bash
+npm run lint
+```
+
+### Adding Features
+
+See [STRUCTURE.md](./STRUCTURE.md) for guidance on adding components, routes, and services.
+
+---
+
+## API Endpoints
+
+### Chat
+- `POST /api/chat/start` — Start new chat session
+- `POST /api/chat/message` — Send message to AI
+- `GET /api/chat/realtime-data` — Fetch AI-generated data
+- `POST /api/chat/close` — Close session
+
+### Anomalies  
+- `POST /api/anomalies/detect` — Detect inventory anomalies
+
+---
+
+## Login Credentials (Demo)
+
+Available demo users are pre-populated. Check `frontend/components/LoginView.tsx` for details.
+
+---
+
+## Troubleshooting
+
+**Backend won't start:**
+```bash
+lsof -i :5000  # Check if port is in use
+```
+
+**Frontend can't reach backend:**
+- Ensure `VITE_API_BASE_URL` is set correctly
+- Verify backend is running
+- Check CORS errors in browser console
+
+**Gemini API errors:**
+- Verify API key in `backend/.env`
+- Check quota in Google Cloud Console
+
+---
+
+## Contributing
+
+Contributions welcome! Please open an issue or pull request.
+
+## License
+
+LICENSE TBD
+
 
 3. Create a `.env.local` file in the project root:
    ```bash

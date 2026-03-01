@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Product } from "../types";
+import { Product } from "../types.js";
 
 export interface InventoryAnomaly {
   productId: string;

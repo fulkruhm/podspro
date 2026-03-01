@@ -1,10 +1,74 @@
 services:
-  podspro:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: pods-postgres
+    environment:
+      POSTGRES_DB: pods_db
+      POSTGRES_USER: pods_user
+      POSTGRES_PASSWORD: pods_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pods_user -d pods_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
     build:
       context: .
-      args:
-        GEMINI_API_KEY: ${GEMINI_API_KEY}
+      dockerfile: Dockerfile
+      target: backend-prod
+    container_name: pods-backend
     ports:
-      - "8080:80"
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - API_KEY=${GEMINI_API_KEY}
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://pods_user:pods_password@postgres:5432/pods_db
     env_file:
-      - .env.local
+      - backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Run database seed once after postgres is ready
+  seeder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend-builder
+    container_name: pods-seeder
+    working_dir: /app/backend
+    environment:
+      - DATABASE_URL=postgresql://pods_user:pods_password@postgres:5432/pods_db
+      - NODE_ENV=production
+    command: sh -c "sleep 5 && npm run seed"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure:3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-prod
+    container_name: pods-frontend
+    ports:
+      - "80:80"
+      - "8080:80"
+    environment:
+      - VITE_API_BASE_URL=http://backend:3001/api
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

@@ -10,16 +10,15 @@ import UserManagementView from './components/UserManagementView';
 import Onboarding from './components/Onboarding';
 import FilterBar from './components/FilterBar';
 import LoginView, { INITIAL_USERS } from './components/LoginView';
-import { MOCK_PRODUCTS, MOCK_ROUTES } from './constants';
 import { fetchRealtimeData } from './services/geminiService';
+import { fetchProducts, fetchRoutes } from './services/dataService';
+import { fetchUsers, updateUser as updateUserInDB } from './services/userService';
 import { Product, FreightRoute, Filters, User, AuditLog } from './types';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [systemUsers, setSystemUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('pods_system_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
-  });
+  const [systemUsers, setSystemUsers] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const saved = localStorage.getItem('pods_audit_logs');
     return saved ? JSON.parse(saved) : [];
@@ -29,23 +28,55 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('pods_products');
-    return saved ? JSON.parse(saved) : MOCK_PRODUCTS;
-  });
-  const [routes, setRoutes] = useState<FreightRoute[]>(MOCK_ROUTES);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [routes, setRoutes] = useState<FreightRoute[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(Date.now());
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // Persist products whenever they change
+  // Load users from database API on component mount
   useEffect(() => {
-    localStorage.setItem('pods_products', JSON.stringify(products));
-  }, [products]);
+    const loadUsers = async () => {
+      try {
+        setIsLoadingUsers(true);
+        const usersData = await fetchUsers();
+        setSystemUsers(usersData);
+        console.log('✓ Loaded users from database:', usersData);
+      } catch (error) {
+        console.error('Error loading users from database:', error);
+        // Fallback to INITIAL_USERS from LoginView if database fails
+        setSystemUsers(INITIAL_USERS);
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+    
+    loadUsers();
+  }, []);
 
-  // Persist system users whenever they change
+  // Load products and routes from database API on component mount
   useEffect(() => {
-    localStorage.setItem('pods_system_users', JSON.stringify(systemUsers));
-  }, [systemUsers]);
+    const loadData = async () => {
+      try {
+        setIsLoadingData(true);
+        const [productsData, routesData] = await Promise.all([
+          fetchProducts(),
+          fetchRoutes()
+        ]);
+        setProducts(productsData);
+        setRoutes(routesData);
+        setLastUpdated(Date.now());
+        console.log('✓ Loaded data from database:', { productsData, routesData });
+      } catch (error) {
+        console.error('Error loading data from database:', error);
+        // Fallback: products and routes remain empty
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+    
+    loadData();
+  }, []);
 
   // Persist audit logs whenever they change
   useEffect(() => {
@@ -103,8 +134,18 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  const handleUpdateUser = (userId: string, updates: Partial<User>) => {
+  const handleUpdateUser = async (userId: string, updates: Partial<User>) => {
+    // Update local state immediately for responsiveness
     setSystemUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
+    
+    // Sync with database in background
+    try {
+      await updateUserInDB(userId, updates);
+      console.log('✓ User updated in database:', userId);
+    } catch (error) {
+      console.error('Error syncing user update to database:', error);
+      // User state still reflects the change locally
+    }
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -185,6 +226,18 @@ const App: React.FC = () => {
   };
 
   const goBackToDashboard = () => setActiveTab('dashboard');
+
+  // Show loading screen while users are being fetched
+  if (isLoadingUsers) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0A0B0F]">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-blue-400 font-mono text-sm">Initializing PODS System...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return (

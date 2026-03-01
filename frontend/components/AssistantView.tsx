@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { sendMessage, startChat } from '../services/geminiService';
 import { ChatMessage } from '../types';
-import { Chat } from '@google/genai';
 
 interface AssistantViewProps {
   initialQuery?: string | null;
@@ -16,44 +15,68 @@ const AssistantView: React.FC<AssistantViewProps> = ({ initialQuery, clearInitia
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const chatRef = useRef<Chat | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [chatInitialized, setChatInitialized] = useState(false);
+  const chatSessionRef = useRef<string | null>(null);
+  const hasProcessedQuery = useRef(false);
 
-  useEffect(() => {
-    chatRef.current = startChat();
-  }, []);
-
-  useEffect(() => {
-    if (initialQuery && chatRef.current && !isLoading) {
-      handleSend(initialQuery);
-      clearInitialQuery();
-    }
-  }, [initialQuery, chatRef.current]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
+  // Define handleSend first so it can be called by other effects
   const handleSend = async (customMessage?: string) => {
     const textToSend = customMessage || input;
-    if (!textToSend.trim() || !chatRef.current || isLoading) return;
+    if (!textToSend.trim() || !chatSessionRef.current || isLoading) return;
 
     const userMessage: ChatMessage = { role: 'user', content: textToSend, timestamp: Date.now() };
     setMessages(prev => [...prev, userMessage]);
     if (!customMessage) setInput('');
     setIsLoading(true);
 
-    const response = await sendMessage(chatRef.current, textToSend);
-    
-    if (response === "ERROR_API_KEY_REQUIRED") {
-        setMessages(prev => [...prev, { role: 'model', content: "Oops! It looks like your API key is invalid or has expired. Please check your environment configuration.", timestamp: Date.now() }]);
-    } else {
-        const aiMessage: ChatMessage = { role: 'model', content: response, timestamp: Date.now() };
-        setMessages(prev => [...prev, aiMessage]);
-    }
+    const response = await sendMessage(chatSessionRef.current, textToSend);
+    const aiMessage: ChatMessage = { role: 'model', content: response, timestamp: Date.now() };
+    setMessages(prev => [...prev, aiMessage]);
     
     setIsLoading(false);
   };
+
+  // Initialize chat session
+  useEffect(() => {
+    const initChat = async () => {
+      try {
+        console.log('[AssistantView] Initializing chat, initialQuery:', initialQuery);
+        const sessionId = await startChat();
+        chatSessionRef.current = sessionId;
+        console.log('[AssistantView] Chat initialized with sessionId:', sessionId);
+        setChatInitialized(true);
+        
+        // If there's an initial query and we haven't processed it yet, send it now
+        if (initialQuery && !hasProcessedQuery.current) {
+          console.log('[AssistantView] Sending initial query:', initialQuery);
+          hasProcessedQuery.current = true;
+          // Small delay to ensure the state update completes
+          setTimeout(() => {
+            handleSend(initialQuery);
+            clearInitialQuery();
+          }, 100);
+        }
+      } catch (error) {
+        console.error('Failed to initialize chat:', error);
+        setMessages(prev => [...prev, { role: 'model', content: "Sorry, I couldn't initialize the chat. Please try again.", timestamp: Date.now() }]);
+      }
+    };
+    initChat();
+  }, []);
+
+  // Also handle case where initialQuery arrives after chat is already initialized
+  useEffect(() => {
+    if (initialQuery && chatInitialized && !hasProcessedQuery.current) {
+      hasProcessedQuery.current = true;
+      handleSend(initialQuery);
+      clearInitialQuery();
+    }
+  }, [initialQuery, chatInitialized]);
+
+  useEffect(() => {
+    const messagesEndRef = document.querySelector('.messages-end');
+    messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-120px)] bg-white rounded-xl md:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -108,7 +131,7 @@ const AssistantView: React.FC<AssistantViewProps> = ({ initialQuery, clearInitia
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
+        <div className="messages-end" />
       </div>
 
       <div className="p-3 md:p-4 bg-white border-t border-slate-200">
