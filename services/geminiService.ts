@@ -8,7 +8,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 export const startChat = (history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []): Chat => {
   const ai = getAI();
   return ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.1-pro-preview',
     config: {
       systemInstruction: SYSTEM_PROMPT,
       temperature: 0.7,
@@ -34,7 +34,7 @@ export const fetchRealtimeData = async () => {
   const ai = getAI();
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: "Generate a realistic supply chain scenario for a grocery retail chain. Create 15 products distributed across 3 regions (North, South, West), 5 different stores, and departments like Produce, Dairy, Bakery, Meat, Frozen, Beverages, and Pantry. Ensure no electronics or non-grocery items. Vary the stock levels to show a mix of optimal, low, excess, and critical statuses. IMPORTANT: For each product, provide 7 days of realistic historicalDemand, a relevant picsum.photos imageUrl, shrinkRate (0-10%), markdownRate (0-20%), oosDays (0-10), turnoverRate, and 7 days of forecastedDemand. For each route, provide 12 weeks of realistic historicalRates to enable trend visualization.",
       config: {
         responseMimeType: "application/json",
