@@ -77,22 +77,9 @@ Detects:
 
 ## 🏗 System Architecture
 
-```
-                React Analytics UI
-                        │
-                        ▼
-                Node.js API Layer
-                        │
-        ┌───────────────┴───────────────┐
-        │                               │
-   AI Intelligence Layer          Business Services
-   (Gemini Reasoning)            Inventory / Logistics
-        │                               │
-        └───────────────┬───────────────┘
-                        ▼
-                  PostgreSQL
-              Operational Data Core
-```
+<div align="center">
+  <img src="assets/architecture.png" alt="PODS System Architecture" width="800"/>
+</div>
 
 ---
 
