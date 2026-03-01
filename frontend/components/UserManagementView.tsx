@@ -12,6 +12,7 @@ interface UserManagementViewProps {
   addAuditLog: (log: Omit<AuditLog, 'id' | 'timestamp'>) => void;
   currentUser: User;
   auditLogs: AuditLog[];
+  products: any[];
 }
 
 const UserManagementView: React.FC<UserManagementViewProps> = ({ 
@@ -23,7 +24,8 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
   onClose,
   addAuditLog,
   currentUser,
-  auditLogs
+  auditLogs,
+  products
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLogsView, setShowLogsView] = useState(false);
@@ -37,8 +39,12 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
     role: 'store_user',
     email: '',
     phoneNumber: '',
-    password: '' // Updated to follow username-match protocol
+    password: '',
+    assignedStore: undefined // For store_user selection
   });
+
+  // Extract unique stores from products
+  const uniqueStores = Array.from(new Set(products.map(p => p.store))).sort();
 
   const handleToggleStatus = (user: User) => {
     const nextStatusMap: Record<User['status'], User['status']> = {
@@ -107,19 +113,35 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate that store_user has a store assigned
+    if (newUser.role === 'store_user' && !newUser.assignedStore) {
+      alert('SYSTEM ALERT: Store Manager must be assigned to a store.');
+      return;
+    }
+    
     // Default password to username if not specified
     const finalPassword = newUser.password || newUser.username;
-    onAddUser({ ...newUser, password: finalPassword, status: 'active' });
+    
+    // Don't send assignedStore for non-store_user roles
+    const userToAdd = {
+      ...newUser,
+      password: finalPassword,
+      status: 'active',
+      assignedStore: newUser.role === 'store_user' ? newUser.assignedStore : undefined
+    };
+    
+    onAddUser(userToAdd);
     addAuditLog({
       userId: currentUser.id,
       userName: currentUser.name,
       action: 'USER_PROVISION',
-      details: `Provisioned new node for @${newUser.username} with role ${newUser.role}`,
+      details: `Provisioned new node for @${newUser.username} with role ${newUser.role}${newUser.assignedStore ? ` at store ${newUser.assignedStore}` : ''}`,
       category: 'provisioning',
       severity: 'info'
     });
     setShowAddModal(false);
-    setNewUser({ name: '', username: '', role: 'store_user', email: '', phoneNumber: '', password: '' });
+    setNewUser({ name: '', username: '', role: 'store_user', email: '', phoneNumber: '', password: '', assignedStore: undefined });
   };
 
   return (
@@ -499,6 +521,23 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
                     <option value="sysadmin">System Admin</option>
                   </select>
                 </div>
+
+                {newUser.role === 'store_user' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assigned Store</label>
+                    <select
+                      required
+                      value={newUser.assignedStore || ''}
+                      onChange={e => setNewUser({...newUser, assignedStore: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all appearance-none"
+                    >
+                      <option value="">Select Store</option>
+                      {uniqueStores.map(store => (
+                        <option key={store} value={store}>{store}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>

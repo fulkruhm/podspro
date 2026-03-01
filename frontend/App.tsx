@@ -284,6 +284,7 @@ const App: React.FC = () => {
             addAuditLog={addAuditLog}
             currentUser={currentUser}
             auditLogs={auditLogs}
+            products={products}
           />
         )}
       </div>

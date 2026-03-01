@@ -49,9 +49,17 @@ Recommended Action:
 ## 🧩 Core Capabilities
 
 ### 📊 Operational Intelligence
-- Real-time inventory analytics
+- Real-time inventory analytics with database fallback
 - Department-level performance tracking
 - KPI monitoring across locations
+- Store-specific views and filtering
+
+### 👥 Role-Based Access Control
+Multi-tier permission system:
+- **Store Manager** — Single-store view, inventory & local operations
+- **Logistics Analyst** — Multi-store routes, shipment tracking, network-wide logistics
+- **Regional Admin** — Regional oversight, all stores, user management
+- **System Admin** — Full platform control, user provisioning, system configuration
 
 ### 🤖 AI Operations Advisor
 Gemini-powered reasoning engine that:
@@ -59,6 +67,7 @@ Gemini-powered reasoning engine that:
 - Explains anomalies in plain language
 - Answers natural-language questions
 - Recommends actionable next steps
+- Falls back to database insights when AI unavailable
 
 ### ⚠️ Anomaly Detection Engine
 Detects:
@@ -157,31 +166,107 @@ npm run dev
 docker-compose up --build
 ```
 
+Access:
+- **Frontend**: http://localhost:5173
+- **API**: http://localhost:3001/api
+- **Nginx Proxy**: http://localhost (port 80)
+
+
+## ✨ Recent Features & Improvements
+
+### User Management & Provisioning
+- **Store-based access control**: Store Managers automatically scoped to assigned store
+- **Role-centric provisioning**: System Admin UI conditionally displays store selection only for Store Manager role
+- **Audit logging**: All user provisioning actions tracked with timestamp and assignment details
+- Admin and Logistics Analysts provision without store requirement
+
+### Real-Time Data & Sync
+- **Sync Live Engine**: Live data refresh button with intelligent fallback
+  - Primary: Fetches from Google Gemini API when available
+  - Fallback: Returns current database snapshot for operational continuity
+- **Zero downtime**: System gracefully handles missing API keys
+
+### Security Enhancements
+- **Rate limiting**: /api/auth/login protected with exponential backoff
+- **Server-side validation**: Zod schema validation on all user inputs
+- **JWT token support**: Prepared for stateless authentication scaling
+- **CORS & security headers**: Nginx configured with proper security middleware
+
+---
+
+## 👤 User Roles & Permissions
+
+| Role | Stores | Inventory | Routes | Users | Chat AI | Notes |
+|---|---|---|---|---|---|---|
+| **Store Manager** | Single (assigned) | ✓ View | ✗ | ✗ | ✓ | Local operations focus |
+| **Logistics Analyst** | All | ✓ View | ✓ Manage | ✗ | ✓ | Network-wide shipments |
+| **Regional Admin** | All | ✓ View/Edit | ✓ View | ✓ Manage | ✓ | Regional oversight |
+| **System Admin** | Global | ✓ Full | ✓ Full | ✓ Full | ✓ | Platform control |
+
+**Provisioning Rules:**
+- Store Manager: **Required** to select store during user creation
+- All other roles: Store field **not shown** during provisioning
+
 ---
 
 ## 🔌 API Surface
 
+**Authentication**
+```
+POST  /api/auth/login          — Server-side session auth with rate limiting
+GET   /api/auth/validate       — JWT token validation
+```
+
 **AI Advisor**
 ```
-POST  /api/chat/start
-POST  /api/chat/message
-GET   /api/chat/realtime-data
+POST  /api/chat/start          — Initiate AI conversation session
+POST  /api/chat/message        — Send message to AI advisor
+GET   /api/chat/realtime-data  — Fetch real-time inventory & logistics (with DB fallback)
 ```
 
 **Anomaly Detection**
 ```
-POST  /api/anomalies/detect
+POST  /api/anomalies/detect    — Detect operational anomalies
+```
+
+**User Management** *(Admin/SysAdmin only)*
+```
+GET   /api/users               — List all users with assigned stores
+POST  /api/users               — Provision new user (role-based store assignment)
+PUT   /api/users/:id           — Update user role/permissions
+DELETE /api/users/:id          — Deactivate user account
+```
+
+**Data**
+```
+GET   /api/data/products       — All products with store inventory
+GET   /api/data/routes         — Logistics routes with shipment status
 ```
 
 ---
 
 ## 🛣 Product Roadmap
 
+**Completed**
+- [x] Server-side authentication with rate limiting
+- [x] Role-based access control (4-tier permission system)
+- [x] Store-based user scoping for Store Managers
+- [x] Real-time data sync with database fallback
+- [x] User provisioning with audit logging
+- [x] Anomaly detection framework
+
+**In Progress**
+- [ ] Frontend store filtering and view isolation
+- [ ] Advanced permission matrix customization
+- [ ] Audit log dashboard and export
+
+**Upcoming**
 - [ ] Predictive demand forecasting
 - [ ] Autonomous reorder engine
 - [ ] Real-time event streaming
 - [ ] Multi-tenant enterprise architecture
 - [ ] AI workflow automation
+- [ ] Mobile app for field operations
 
 ---
 
