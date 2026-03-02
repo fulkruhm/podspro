@@ -33,7 +33,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
     return true;
   });
   const productOptions = Array.from(
-    new Map(productsForProductFilter.map(p => [p.id, p.name])).entries()
+    new Map<string, string>(productsForProductFilter.map(p => [p.id, p.name])).entries()
   )
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -64,12 +64,37 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
 
   const clearFilters = () => {
     setFilters({ 
-      region: filters.region, // Keep region/store if it was assigned? 
+      region: '',
       store: isStoreFixed ? filters.store : '', 
       department: '', 
       product: '',
       status: '' 
     });
+  };
+
+  const clearFilterLevel = (level: 'region' | 'store' | 'department' | 'product' | 'status') => {
+    if (level === 'region') {
+      setFilters({ ...filters, region: '', store: isStoreFixed ? filters.store : '', department: '', product: '' });
+      return;
+    }
+
+    if (level === 'store') {
+      if (isStoreFixed) return;
+      setFilters({ ...filters, store: '', department: '', product: '' });
+      return;
+    }
+
+    if (level === 'department') {
+      setFilters({ ...filters, department: '', product: '' });
+      return;
+    }
+
+    if (level === 'product') {
+      setFilters({ ...filters, product: '' });
+      return;
+    }
+
+    setFilters({ ...filters, status: '' });
   };
 
   const isFiltered = filters.region || filters.store || filters.department || filters.product || filters.status;
@@ -140,6 +165,53 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
           </div>
         </div>
 
+        {isFiltered && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Active</span>
+            {filters.region && (
+              <button
+                onClick={() => clearFilterLevel('region')}
+                className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-[10px] font-bold border border-blue-100 hover:bg-blue-100 transition"
+              >
+                Region: {filters.region} ×
+              </button>
+            )}
+            {filters.store && (
+              <button
+                onClick={() => clearFilterLevel('store')}
+                disabled={isStoreFixed}
+                className="bg-cyan-50 text-cyan-700 px-2 py-1 rounded-full text-[10px] font-bold border border-cyan-100 hover:bg-cyan-100 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Store: {filters.store}{isStoreFixed ? '' : ' ×'}
+              </button>
+            )}
+            {filters.department && (
+              <button
+                onClick={() => clearFilterLevel('department')}
+                className="bg-violet-50 text-violet-700 px-2 py-1 rounded-full text-[10px] font-bold border border-violet-100 hover:bg-violet-100 transition"
+              >
+                Dept: {filters.department} ×
+              </button>
+            )}
+            {selectedProductName && (
+              <button
+                onClick={() => clearFilterLevel('product')}
+                className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full text-[10px] font-bold border border-indigo-100 hover:bg-indigo-100 transition truncate max-w-[220px]"
+              >
+                Product: {selectedProductName} ×
+              </button>
+            )}
+            {filters.status && (
+              <button
+                onClick={() => clearFilterLevel('status')}
+                className="bg-amber-50 text-amber-700 px-2 py-1 rounded-full text-[10px] font-bold border border-amber-100 hover:bg-amber-100 transition"
+              >
+                Status: {filters.status} ×
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Expanded Grid */}
         {isExpanded && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2 animate-in slide-in-from-top-2 duration-200">
@@ -204,6 +276,18 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
                 {statuses.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
               </select>
             </div>
+          </div>
+        )}
+
+        {isFiltered && filteredCount === 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 flex items-center justify-between gap-3">
+            <p className="text-[11px] text-amber-800 font-semibold">No products match current filters.</p>
+            <button
+              onClick={clearFilters}
+              className="text-[10px] font-black uppercase tracking-widest text-amber-800 hover:underline"
+            >
+              Relax Filters
+            </button>
           </div>
         )}
       </div>

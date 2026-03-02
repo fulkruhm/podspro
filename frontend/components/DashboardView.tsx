@@ -22,12 +22,37 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   lastUpdated,
   userRole
 }) => {
+  const [currentTime, setCurrentTime] = React.useState(Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getLastSyncedLabel = () => {
+    const diffMs = currentTime - lastUpdated;
+    const diffSeconds = Math.max(1, Math.floor(diffMs / 1000));
+
+    if (diffSeconds < 60) return `${diffSeconds}s ago`;
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    return `${diffHours}h ago`;
+  };
+
   // Inventory calculations
   const statusCounts = products.reduce((acc: any, p) => {
     const status = p.status.toLowerCase();
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
+
+  const statusSummary = [
+    { key: 'critical', label: 'Critical', count: statusCounts.critical || 0, className: 'bg-red-50 text-red-700 border-red-100' },
+    { key: 'low', label: 'Low', count: statusCounts.low || 0, className: 'bg-amber-50 text-amber-700 border-amber-100' },
+    { key: 'optimal', label: 'Optimal', count: statusCounts.optimal || 0, className: 'bg-green-50 text-green-700 border-green-100' },
+    { key: 'excess', label: 'Excess', count: statusCounts.excess || 0, className: 'bg-blue-50 text-blue-700 border-blue-100' }
+  ];
 
   const pieData = Object.keys(statusCounts).map(status => ({
     name: status.toUpperCase(),
@@ -145,7 +170,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">{getDashboardTitle()}</h2>
           <div className="flex items-center space-x-2 mt-1">
             <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></span>
-            <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest italic">Encrypted Connection • {new Date(lastUpdated).toLocaleTimeString()}</p>
+            <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest italic">Encrypted Connection • Synced {getLastSyncedLabel()}</p>
           </div>
         </div>
         <button 
@@ -276,6 +301,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                 </PieChart>
               </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {statusSummary.map((item) => (
+                <div key={item.key} className={`rounded-lg border px-2 py-1.5 ${item.className}`}>
+                  <div className="text-[9px] font-black uppercase tracking-widest">{item.label}</div>
+                  <div className="text-sm font-black mt-0.5">{item.count}</div>
+                </div>
+              ))}
             </div>
           </div>
         )}
