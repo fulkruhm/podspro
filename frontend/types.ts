@@ -63,6 +63,7 @@ export interface Filters {
   region: string;
   store: string;
   department: string;
+  product: string;
   status: string;
 }
 

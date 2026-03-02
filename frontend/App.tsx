@@ -88,15 +88,16 @@ const App: React.FC = () => {
     region: '',
     store: '',
     department: '',
+    product: '',
     status: ''
   });
 
   // Handle auto-filtering for store users
   useEffect(() => {
     if (currentUser?.role === 'store_user' && currentUser.assignedStore) {
-      setFilters(prev => ({ ...prev, store: currentUser.assignedStore || '' }));
+      setFilters(prev => ({ ...prev, store: currentUser.assignedStore || '', department: '', product: '' }));
     } else if (currentUser?.role === 'admin' || currentUser?.role === 'sysadmin') {
-      setFilters({ region: '', store: '', department: '', status: '' });
+      setFilters({ region: '', store: '', department: '', product: '', status: '' });
     }
   }, [currentUser]);
 
@@ -163,6 +164,7 @@ const App: React.FC = () => {
       if (filters.region && p.region !== filters.region) return false;
       if (filters.store && p.store !== filters.store) return false;
       if (filters.department && p.department !== filters.department) return false;
+      if (filters.product && p.id !== filters.product) return false;
       if (filters.status && p.status.toLowerCase() !== filters.status.toLowerCase()) return false;
       return true;
     });

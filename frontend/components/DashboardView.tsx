@@ -34,7 +34,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     value: statusCounts[status]
   }));
 
-  const COLORS = ['#10b981', '#ef4444', '#3b82f6', '#f59e0b'];
+  const STATUS_COLORS: Record<string, string> = {
+    optimal: '#10b981',
+    critical: '#ef4444',
+    excess: '#3b82f6',
+    low: '#f59e0b'
+  };
   const inventoryValue = products.reduce((acc, p) => acc + (p.currentStock * p.price), 0);
 
   // Generate Inventory Alerts
@@ -265,7 +270,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={pieData} cx="50%" cy="45%" innerRadius={55} outerRadius={75} paddingAngle={8} dataKey="value">
-                    {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />)}
+                    {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name.toLowerCase()] || '#94a3b8'} strokeWidth={0} />)}
                   </Pie>
                   <Tooltip />
                   <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />

@@ -14,11 +14,51 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
   const [isExpanded, setIsExpanded] = useState(false);
 
   const regions = Array.from(new Set(products.map(p => p.region))).sort();
-  const stores = Array.from(new Set(products.map(p => p.store))).sort();
-  const departments = Array.from(new Set(products.map(p => p.department))).sort();
+  const productsForStores = filters.region
+    ? products.filter(p => p.region === filters.region)
+    : products;
+  const stores = Array.from(new Set(productsForStores.map(p => p.store))).sort();
+
+  const productsForDepartments = products.filter(p => {
+    if (filters.region && p.region !== filters.region) return false;
+    if (filters.store && p.store !== filters.store) return false;
+    return true;
+  });
+  const departments = Array.from(new Set(productsForDepartments.map(p => p.department))).sort();
+
+  const productsForProductFilter = products.filter(p => {
+    if (filters.region && p.region !== filters.region) return false;
+    if (filters.store && p.store !== filters.store) return false;
+    if (filters.department && p.department !== filters.department) return false;
+    return true;
+  });
+  const productOptions = Array.from(
+    new Map(productsForProductFilter.map(p => [p.id, p.name])).entries()
+  )
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const selectedProductName = filters.product
+    ? productOptions.find(p => p.id === filters.product)?.name || ''
+    : '';
   const statuses = ['optimal', 'low', 'excess', 'critical'];
 
   const handleFilterChange = (key: keyof Filters, value: string) => {
+    if (key === 'region') {
+      setFilters({ ...filters, region: value, store: '', department: '', product: '' });
+      return;
+    }
+
+    if (key === 'store') {
+      setFilters({ ...filters, store: value, department: '', product: '' });
+      return;
+    }
+
+    if (key === 'department') {
+      setFilters({ ...filters, department: value, product: '' });
+      return;
+    }
+
     setFilters({ ...filters, [key]: value });
   };
 
@@ -27,11 +67,12 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
       region: filters.region, // Keep region/store if it was assigned? 
       store: isStoreFixed ? filters.store : '', 
       department: '', 
+      product: '',
       status: '' 
     });
   };
 
-  const isFiltered = filters.region || filters.store || filters.department || filters.status;
+  const isFiltered = filters.region || filters.store || filters.department || filters.product || filters.status;
 
   // Generate a summary string for the condensed view
   const getSummary = () => {
@@ -39,6 +80,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
     if (filters.region) parts.push(filters.region);
     if (filters.store) parts.push(filters.store);
     if (filters.department) parts.push(filters.department);
+    if (selectedProductName) parts.push(selectedProductName);
     if (filters.status) parts.push(filters.status.charAt(0).toUpperCase() + filters.status.slice(1));
     
     if (parts.length === 0) return "Global Portfolio";
@@ -89,6 +131,9 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
             {!isExpanded && isFiltered && (
               <div className="hidden md:flex space-x-1">
                 {filters.region && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-100">{filters.region}</span>}
+                {filters.store && <span className="bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-cyan-100 truncate max-w-[160px]">{filters.store}</span>}
+                {filters.department && <span className="bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-violet-100">{filters.department}</span>}
+                {selectedProductName && <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-indigo-100 truncate max-w-[180px]">{selectedProductName}</span>}
                 {filters.status && <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-100">{filters.status}</span>}
               </div>
             )}
@@ -97,7 +142,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
 
         {/* Expanded Grid */}
         {isExpanded && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 animate-in slide-in-from-top-2 duration-200">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2 animate-in slide-in-from-top-2 duration-200">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">Region</label>
               <select 
@@ -133,6 +178,18 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
               >
                 <option value="">All Departments</option>
                 {departments.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">Product</label>
+              <select 
+                value={filters.product}
+                onChange={(e) => handleFilterChange('product', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none transition"
+              >
+                <option value="">All Products</option>
+                {productOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
 
