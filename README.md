@@ -21,15 +21,15 @@
 
 ---
 
-## 🎬 What PODS Is
+## What is PODS?
 
 PODS is an **AI-native supply chain intelligence platform** that transforms operational data into real-time decisions.
 
-Instead of dashboards that only visualize metrics, PODS acts as an **operational co-pilot** — continuously analyzing inventory and logistics signals to surface risks, insights, and recommended actions.
+Rather than dashboards that only visualize metrics, PODS acts as an **operational co-pilot** — continuously analyzing inventory and logistics signals to surface risks, insights, and recommended actions before problems escalate.
 
 ---
 
-## ⚡ Demo — How Teams Use PODS
+## Live Demo
 
 ```
 Operator: "Why is Store 14 inventory dropping faster this week?"
@@ -39,145 +39,106 @@ PODS AI:
   • Shipment delay detected (logistics route TX-3)
   • Stockout risk within 4 days
 
-Recommended Action:
+Recommended Actions:
   → Trigger reorder suggestion
   → Reallocate excess inventory from Store 09
 ```
 
 ---
 
-## 🧩 Core Capabilities
+## Core Capabilities
 
-### 📊 Operational Intelligence
-- Real-time inventory analytics with database fallback
-- Department-level performance tracking
-- KPI monitoring across locations
-- Store-specific views and filtering
+**Operational Intelligence**
+Real-time inventory analytics, department-level performance tracking, KPI monitoring across locations, and store-specific views with role-filtered data.
 
-### 👥 Role-Based Access Control
-Multi-tier permission system:
-- **Store Manager** — Single-store view, inventory & local operations
-- **Logistics Analyst** — Multi-store routes, shipment tracking, network-wide logistics
-- **Regional Admin** — Regional oversight, all stores, user management
-- **System Admin** — Full platform control, user provisioning, system configuration
+**AI Operations Advisor**
+Powered by Google Gemini — understands operational context, explains anomalies in plain language, and recommends actionable next steps. Falls back to live database insights when AI is unavailable, ensuring zero downtime.
 
-### 🤖 AI Operations Advisor
-Gemini-powered reasoning engine that:
-- Understands operational context
-- Explains anomalies in plain language
-- Answers natural-language questions
-- Recommends actionable next steps
-- Falls back to database insights when AI unavailable
+**ML Microservice (Python)**
+A standalone FastAPI service running scikit-learn models:
+- Isolation Forest for inventory anomaly detection
+- Exponential smoothing with confidence intervals for demand forecasting
+- Exposed via API endpoints for headless integration
 
-### 📡 ML Service (Backend)
-**Backend ML service running** (Python microservice):
-- Inventory anomaly detection available via API
-- Demand forecasting via API endpoints
-- Health monitoring and status checks
-- *UI visualization removed for frontend simplification*
-
-### 📦 Inventory & Logistics Platform
-- Multi-store visibility
-- Shipment monitoring
-- Freight workflow insights
-- Role-specific operational views
+**Role-Based Access Control**
+Four-tier permission system scoped to operational responsibility:
+- **Store Manager** — Single assigned store, inventory and local ops
+- **Logistics Analyst** — Multi-store routes, shipment tracking, network logistics
+- **Regional Admin** — Regional oversight, store management, user administration
+- **System Admin** — Full platform control, provisioning, system configuration
 
 ---
 
-## 🧱 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | **Frontend** | React 18, TypeScript, Tailwind CSS, Recharts |
 | **Backend** | Node.js, Express.js, TypeScript REST API |
 | **ML Service** | Python, FastAPI, scikit-learn, pandas, numpy |
-| **Database** | PostgreSQL — transactional storage, analytical querying, anomaly history |
-| **AI Layer** | Google Gemini — context-aware operational reasoning |
-| **Infrastructure** | Docker, Docker Compose, Nginx reverse proxy |
+| **Database** | PostgreSQL |
+| **AI Layer** | Google Gemini |
+| **Infrastructure** | Docker, Docker Compose, Nginx |
 
 ---
 
-## 🏛️ Hybrid Architecture (Node.js + Python)
+## Architecture
 
-PODS uses a **microservice architecture** combining the strengths of both ecosystems:
+PODS uses a **microservice architecture** combining Node.js and Python for their respective strengths:
 
 ```
-React Frontend  ──┐
-                  │
-             Node.js Backend (Port 3001)         Python ML Service (Port 5000)
-             ┌────────────────────────┐          ┌──────────────────────┐
-             │  • Authentication      │          │  • Anomaly Detection │
-             │  • User Management     │  ──────▶ │  • Forecasting       │
-             │  • Data APIs           │          │  • ML Analytics      │
-             │  • Chat with Gemini    │          │  • scikit-learn      │
-             └────────────────────────┘          └──────────────────────┘
-                     │
-                     ▼
-              PostgreSQL Database
+React Frontend
+      │
+      ▼
+Node.js Backend (Port 3001)          Python ML Service (Port 5000)
+┌─────────────────────────┐          ┌──────────────────────────┐
+│  • Authentication        │          │  • Anomaly Detection     │
+│  • User Management       │ ───────▶ │  • Demand Forecasting    │
+│  • Data APIs             │          │  • scikit-learn Models   │
+│  • Gemini AI Chat        │          └──────────────────────────┘
+└─────────────────────────┘
+            │
+            ▼
+     PostgreSQL Database
 ```
 
-**Why This Approach?**
-
-| Aspect | Benefit |
-|--------|---------|
-| **HTTP APIs** | Node.js excels at I/O, auth, routing, REST endpoints |
-| **ML/Data Science** | Python has scikit-learn, TensorFlow, pandas, numpy ecosystem |
-| **Independent Scaling** | Scale ML separately for compute-intensive operations |
-| **Developer Experience** | Data scientists work in Python, full-stack devs in Node.js |
-| **Production Ready** | Both containerized, orchestrated with Docker Compose |
-
-**See:** [ML Service API Docs](ML_SERVICE_API.md)
+| Concern | Rationale |
+|---|---|
+| Node.js for API layer | Optimized for I/O, auth, routing, REST endpoints |
+| Python for ML | Native access to scikit-learn, pandas, numpy ecosystem |
+| Independent services | ML scales separately for compute-intensive workloads |
+| Containerized | Both services orchestrated with Docker Compose |
 
 ---
 
-## 🧠 Architecture Philosophy
-
-> PODS treats AI as a **decision layer**, not a chatbot.
-
-```
-Data  →  Context  →  Reasoning  →  Recommendation
-```
-
-**Key principles:**
-- AI augments workflows, not replaces systems
-- Database remains source of truth
-- APIs isolate intelligence from UI
-- Modular services enable future ML integration
-
----
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Requirements
 
 - Node.js 18+
 - PostgreSQL 14+
-- Gemini API key
-- Docker *(optional)*
+- Google Gemini API key
+- Docker *(optional, for containerized deployment)*
 
-### Clone
+### Setup
 
 ```bash
 git clone https://github.com/fulkruhm/podspro.git
 cd podspro
 ```
 
-### Environment Setup
-
 **Backend `.env`**
 ```env
-PORT=5000
+PORT=3001
 DATABASE_URL=postgresql://user:password@localhost:5432/pods
-GEMINI_API_KEY=your_key
+GEMINI_API_KEY=your_key_here
 NODE_ENV=development
 ```
 
 **Frontend `.env`**
 ```env
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_BASE_URL=http://localhost:3001/api
 ```
-
-### Run Development
 
 ```bash
 npm install
@@ -186,170 +147,112 @@ npm run dev
 
 ---
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 ```bash
 docker-compose up --build
 ```
 
-Access:
-- **Frontend**: http://localhost:5173
-- **API**: http://localhost:3001/api
-- **ML Service**: http://localhost:5000 *(internal)*
-- **Nginx Proxy**: http://localhost (port 80)
-
-### Demo Credentials
-
-| Username | Password | Role |
-|---|---|---|
-| `matt` | `matt` | System Admin |
-| `logistics_user` | `pass` | Logistics Analyst |
-| `main_st_user` | `pass` | Store Manager (Main St. Market) |
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| API | http://localhost:3001/api |
+| Nginx Proxy | http://localhost |
 
 ---
 
-## ✨ Recent Features & Improvements
-
-### Core Platform Capabilities
-- **Inventory Engine**: Store-level inventory management with ROP and safety stock controls
-- **Logistics Engine**: Freight route management and shipment tracking
-- **AI Advisor**: Natural language interface for operational questions using Google Gemini
-- **User Management**: Multi-role access control with audit logging
-- **Real-time Data Sync**: Database fallback for operational continuity
-
-### Python ML Microservice 🐍 (Backend Only)
-- **Hybrid Architecture**: FastAPI microservice for ML/AI alongside Node.js backend
-- **Anomaly Detection**: Isolation Forest for inventory anomalies (API-only, no UI)
-- **Demand Forecasting**: Exponential smoothing with confidence intervals (API-only, no UI)
-- **Scalable**: Python service scales independently for compute-intensive operations
-
-**Available ML Endpoints** *(Backend API only)*:
-```
-POST   /api/ml/anomalies/detect    — Detect inventory anomalies
-POST   /api/ml/forecast             — Forecast future demand
-GET    /api/ml/health               — Check ML service status
-GET    /api/ml/info                 — Get service capabilities
-```
-
-**Note**: ML visualization UI has been removed. Backend service remains for API integration.
-
-### User Management & Provisioning
-- **Store-based access control**: Store Managers automatically scoped to assigned store
-- **Role-centric provisioning**: System Admin UI conditionally displays store selection only for Store Manager role
-- **Audit logging**: All user provisioning actions tracked with timestamp and assignment details
-- Admin and Logistics Analysts provision without store requirement
-
-### Real-Time Data & Sync
-- **Sync Live Engine**: Live data refresh button with intelligent fallback
-  - Primary: Fetches from Google Gemini API when available
-  - Fallback: Returns current database snapshot for operational continuity
-- **Zero downtime**: System gracefully handles missing API keys
-
-### Security Enhancements
-- **Rate limiting**: /api/auth/login protected with exponential backoff
-- **Server-side validation**: Zod schema validation on all user inputs
-- **JWT token support**: Prepared for stateless authentication scaling
-- **CORS & security headers**: Nginx configured with proper security middleware
-
----
-
-## 👤 User Roles & Permissions
-
-| Role | Stores | Inventory | Routes | Users | Chat AI | Notes |
-|---|---|---|---|---|---|---|
-| **Store Manager** | Single (assigned) | ✓ View | ✗ | ✗ | ✓ | Local operations focus |
-| **Logistics Analyst** | All | ✓ View | ✓ Manage | ✗ | ✓ | Network-wide shipments |
-| **Regional Admin** | All | ✓ View/Edit | ✓ View | ✓ Manage | ✓ | Regional oversight |
-| **System Admin** | Global | ✓ Full | ✓ Full | ✓ Full | ✓ | Platform control |
-
-**Provisioning Rules:**
-- Store Manager: **Required** to select store during user creation
-- All other roles: Store field **not shown** during provisioning
-
----
-
-## 🔌 API Surface
+## API Reference
 
 **Authentication**
 ```
-POST  /api/auth/login          — Server-side session auth with rate limiting
-GET   /api/auth/validate       — JWT token validation
+POST  /api/auth/login         — Login with rate limiting & exponential backoff
+GET   /api/auth/validate      — Validate JWT token
 ```
 
 **AI Advisor**
 ```
-POST  /api/chat/start          — Initiate AI conversation session
-POST  /api/chat/message        — Send message to AI advisor
-GET   /api/chat/realtime-data  — Fetch real-time inventory & logistics (with DB fallback)
+POST  /api/chat/start         — Initiate AI conversation session
+POST  /api/chat/message       — Send message to AI advisor
+GET   /api/chat/realtime-data — Fetch live inventory & logistics data
 ```
 
-**Anomaly Detection**
+**ML Service**
 ```
-POST  /api/anomalies/detect    — Detect operational anomalies
+POST  /api/ml/anomalies/detect  — Run Isolation Forest anomaly detection
+POST  /api/ml/forecast          — Generate demand forecast with confidence intervals
+GET   /api/ml/health            — ML service health check
+GET   /api/ml/info              — Service capabilities and model info
 ```
 
-**User Management** *(Admin/SysAdmin only)*
+**User Management** *(Admin only)*
 ```
-GET   /api/users               — List all users with assigned stores
-POST  /api/users               — Provision new user (role-based store assignment)
-PUT   /api/users/:id           — Update user role/permissions
-DELETE /api/users/:id          — Deactivate user account
+GET    /api/users           — List users with store assignments
+POST   /api/users           — Provision new user
+PUT    /api/users/:id       — Update role or permissions
+DELETE /api/users/:id       — Deactivate account
 ```
 
 **Data**
 ```
-GET   /api/data/products       — All products with store inventory
-GET   /api/data/routes         — Logistics routes with shipment status
+GET  /api/data/products     — Products with store-level inventory
+GET  /api/data/routes       — Logistics routes and shipment status
 ```
 
 ---
 
-## 🛣 Product Roadmap
+## Permissions Matrix
+
+| Role | Stores | Inventory | Routes | Users | AI Chat |
+|---|---|---|---|---|---|
+| Store Manager | Assigned only | View | — | — | ✓ |
+| Logistics Analyst | All | View | Manage | — | ✓ |
+| Regional Admin | All | View / Edit | View | Manage | ✓ |
+| System Admin | Global | Full | Full | Full | ✓ |
+
+---
+
+## Roadmap
 
 **Completed**
-- [x] Server-side authentication with rate limiting
-- [x] Role-based access control (4-tier permission system)
-- [x] Store-based user scoping for Store Managers
+- [x] JWT authentication with rate-limited login
+- [x] 4-tier role-based access control
+- [x] Store-scoped access for Store Managers
 - [x] Real-time data sync with database fallback
 - [x] User provisioning with audit logging
-- [x] Anomaly detection framework (Isolation Forest - API)
-- [x] Demand forecasting engine (Exponential Smoothing - API)
+- [x] Anomaly detection — Isolation Forest (API)
+- [x] Demand forecasting — Exponential Smoothing (API)
 - [x] Python ML microservice (FastAPI + scikit-learn)
 - [x] Hybrid Node.js + Python architecture
-- [x] ML Service gateway router in Node.js backend
 - [x] Core inventory and logistics management
 
 **In Progress**
 - [ ] ML model versioning and A/B testing (MLflow)
 - [ ] Advanced time series forecasting (Prophet, ARIMA)
-- [ ] Forecast result caching
-- [ ] Advanced permission matrix customization
 - [ ] Audit log dashboard and export
+- [ ] Advanced permission matrix customization
 
 **Upcoming**
-- [ ] TensorFlow models for advanced demand forecasting
 - [ ] Autonomous reorder engine with anomaly-triggered alerts
-- [ ] Real-time event streaming (WebSocket updates)
-- [ ] Multi-tenant enterprise architecture enhancements
-- [ ] AI workflow automation for supply chain decisions
+- [ ] Real-time event streaming via WebSockets
 - [ ] Mobile app for field operations
-- [ ] GPU support for ML model training
-- [ ] Optional: ML visualization UI (dashboard components available)
+- [ ] Multi-tenant enterprise architecture
 
 ---
 
-## 🧪 Engineering Standards
+## Engineering Standards
 
-- Strict TypeScript throughout
-- Service-layer architecture
+- Strict TypeScript across frontend and backend
+- Service-layer architecture with clear separation of concerns
 - Environment-based configuration
-- Container-first deployment
+- Container-first deployment with Docker Compose
+- Server-side validation via Zod schemas
+- CORS and security headers configured at Nginx layer
 
 ---
 
-## 🌍 Vision
+## Vision
 
-PODS aims to become the **AI operating system for physical operations**, enabling supply chains to move from reactive management to autonomous decision-making.
+PODS is built to become the **AI operating system for physical operations** — enabling supply chains to shift from reactive management to autonomous, intelligent decision-making.
 
 ---
 
@@ -357,6 +260,6 @@ PODS aims to become the **AI operating system for physical operations**, enablin
 
 **👨‍💻 Maintained by [Fulkruhm](https://github.com/fulkruhm)**
 
-*AI-Driven Operations Intelligence*
+MIT License · *AI-Driven Operations Intelligence*
 
 </div>
