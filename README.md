@@ -84,14 +84,6 @@ Gemini-powered reasoning engine that:
 
 ---
 
-## 🏗 System Architecture
-
-<div align="center">
-  <img src="assets/architecture.png" alt="PODS System Architecture" width="800"/>
-</div>
-
----
-
 ## 🧱 Tech Stack
 
 | Layer | Technology |
