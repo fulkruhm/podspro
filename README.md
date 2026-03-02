@@ -4,7 +4,7 @@
 
 ### 🧠 Predictive Order & Demand Solutions
 
-**The AI Operating System for Supply Chains**
+**The AI Co-Pilot for Supply Chain Operations**
 
 *AI-native operational intelligence for inventory, logistics, and demand prediction.*
 
@@ -29,7 +29,9 @@ Rather than dashboards that only visualize metrics, PODS acts as an **operationa
 
 ---
 
-## Live Demo
+## AI Advisor in Action
+
+A natural language query becomes an operational decision in seconds:
 
 ```
 Operator: "Why is Store 14 inventory dropping faster this week?"
@@ -241,12 +243,19 @@ GET  /api/data/routes       — Logistics routes and shipment status
 
 ## Engineering Standards
 
-- Strict TypeScript across frontend and backend
-- Service-layer architecture with clear separation of concerns
-- Environment-based configuration
-- Container-first deployment with Docker Compose
-- Server-side validation via Zod schemas
-- CORS and security headers configured at Nginx layer
+PODS is built with production reliability and maintainability as first-class concerns.
+
+**Type Safety** — Strict TypeScript enforced across both frontend and backend, eliminating runtime type errors and improving IDE-driven development.
+
+**Service-Layer Architecture** — Business logic is cleanly separated from routing and data access layers, making each component independently testable and replaceable.
+
+**Input Validation** — All API inputs are validated server-side using Zod schemas, ensuring malformed or malicious payloads are rejected before reaching business logic.
+
+**Security** — Login endpoint protected with rate limiting and exponential backoff. CORS policies and security headers enforced at the Nginx layer.
+
+**Configuration Management** — All environment-specific values are externalized via `.env` files, keeping secrets out of source control and enabling clean dev/staging/prod parity.
+
+**Container-First Deployment** — Every service is containerized and orchestrated with Docker Compose, ensuring consistent, reproducible environments from local development to production.
 
 ---
 
