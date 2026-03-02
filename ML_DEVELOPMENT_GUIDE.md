@@ -1,5 +1,9 @@
 # Python ML Service Development Guide
 
+## Status: Backend Service (API-Only)
+
+**Note**: Frontend visualization components have been removed. This guide covers development of the Python ML microservice backend only.
+
 ## Quick Start
 
 ### Local Development (Without Docker)

@@ -1,10 +1,15 @@
 # Python ML Microservice Implementation Summary
 
+## Status: Backend Service Active (UI Removed)
+
+**Note**: Frontend UI components for ML (MLDashboard, AnomalyVisualization, ForecastVisualization) have been removed. The Python ML microservice backend remains fully operational and available via API endpoints.
+
 ## Overview
 
-You now have a **hybrid Node.js + Python microservice architecture** enabling PODS to leverage the best of both worlds:
-- **Node.js Backend** for REST APIs, authentication, and user management
-- **Python ML Service** for advanced machine learning and data science
+PODS has a **hybrid Node.js + Python microservice architecture**:
+- **Node.js Backend** (Port 3001): REST APIs, authentication, user management
+- **Python ML Service** (Port 5000/5001): Advanced machine learning and anomaly detection
+- **API-First Design**: ML service callable via backend gateway (/api/ml/* endpoints)
 
 ---
 

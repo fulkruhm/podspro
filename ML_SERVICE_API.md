@@ -1,5 +1,9 @@
 # PODS ML Service API Documentation
 
+## Status: API-Only (Frontend UI Removed)
+
+**Note**: ML visualization frontend components have been removed (March 1, 2026). The Python FastAPI backend service remains fully operational and all API endpoints are accessible via the Node.js backend gateway.
+
 ## Overview
 
 PODS uses a **hybrid architecture** with a **Python FastAPI microservice** for ML/AI capabilities:

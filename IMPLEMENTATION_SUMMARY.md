@@ -1,7 +1,12 @@
-# Regional Analytics Implementation - Completion Summary
+# Regional Analytics Implementation - ARCHIVED
 
-## Overview
-Successfully implemented a production-ready Regional Analytics system with rate-limiting resilience and optional product filtering across all forecasting and anomaly detection features.
+**⚠️ NOTE**: This document describes frontend features that have been **removed from production**. The ML backend service remains fully operational and accessible via API.
+
+**Current Status**: Frontend UI components (MLDashboard, AnomalyVisualization, ForecastVisualization) are no longer rendered. See [ML_UI_REMOVAL_SUMMARY.md](ML_UI_REMOVAL_SUMMARY.md) for details.
+
+## Historical Overview
+
+This document documents the implementation of a Regional Analytics system (removed March 1, 2026).
 
 ## Key Implementations (This Session)
 
