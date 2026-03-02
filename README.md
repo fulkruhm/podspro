@@ -69,12 +69,12 @@ Gemini-powered reasoning engine that:
 - Recommends actionable next steps
 - Falls back to database insights when AI unavailable
 
-### ⚠️ Anomaly Detection Engine
-Detects:
-- Abnormal demand spikes
-- Inventory inconsistencies
-- Logistics disruptions
-- Operational risk patterns
+### 📡 ML Service (Backend)
+**Backend ML service running** (Python microservice):
+- Inventory anomaly detection available via API
+- Demand forecasting via API endpoints
+- Health monitoring and status checks
+- *UI visualization removed for frontend simplification*
 
 ### 📦 Inventory & Logistics Platform
 - Multi-store visibility
@@ -218,44 +218,28 @@ Access:
 
 ## ✨ Recent Features & Improvements
 
-### ML Insights Dashboard 📊 (NEW!)
-Real-time visualization and monitoring of ML predictions:
-- **Anomaly Detection Interface**: Interactive scanner with live anomaly detection
-  - Adjustable sensitivity (1-20%) for fine-tuned detection
-  - Severity-based alerts (critical/warning/info) with color coding
-  - Root cause analysis and actionable recommendations
-  - Anomaly score visualization with progress indicators
-- **Demand Forecasting Tool**: Advanced forecasting with interactive visualization
-  - Configurable forecast periods (7, 14, or 30 days)
-  - Interactive chart with confidence intervals (upper/lower bounds)
-  - Trend analysis (📈 Increasing, 📉 Decreasing, ➡️ Stable)
-  - Detailed forecast table with daily predictions
-- **ML Service Monitor**: Real-time health and status dashboard
-  - Service capabilities and technology stack display
-  - Optional auto-refresh every 30 seconds
-  - Health-based UI state management
-- **Components:**
-  - `MLDashboard.tsx` - Main dashboard with 3-tab interface
-  - `AnomalyVisualization.tsx` - Live anomaly scanner
-  - `ForecastVisualization.tsx` - Forecast with Recharts charts
-  - `mlService.ts` - TypeScript ML API client
+### Core Platform Capabilities
+- **Inventory Engine**: Store-level inventory management with ROP and safety stock controls
+- **Logistics Engine**: Freight route management and shipment tracking
+- **AI Advisor**: Natural language interface for operational questions using Google Gemini
+- **User Management**: Multi-role access control with audit logging
+- **Real-time Data Sync**: Database fallback for operational continuity
 
-### Python ML Microservice 🐍
+### Python ML Microservice 🐍 (Backend Only)
 - **Hybrid Architecture**: FastAPI microservice for ML/AI alongside Node.js backend
-- **Anomaly Detection**: Isolation Forest for inventory anomalies with explainable results
-- **Demand Forecasting**: Exponential smoothing with trend analysis and confidence intervals
-- **Ready for TensorFlow**: Pre-configured for deep learning model integration
+- **Anomaly Detection**: Isolation Forest for inventory anomalies (API-only, no UI)
+- **Demand Forecasting**: Exponential smoothing with confidence intervals (API-only, no UI)
 - **Scalable**: Python service scales independently for compute-intensive operations
 
-**Endpoints:**
+**Available ML Endpoints** *(Backend API only)*:
 ```
 POST   /api/ml/anomalies/detect    — Detect inventory anomalies
 POST   /api/ml/forecast             — Forecast future demand
-POST   /api/ml/batch-analysis       — Run multiple analyses
 GET    /api/ml/health               — Check ML service status
+GET    /api/ml/info                 — Get service capabilities
 ```
 
-[Full ML API Documentation](ML_SERVICE_API.md)
+**Note**: ML visualization UI has been removed. Backend service remains for API integration.
 
 ### User Management & Provisioning
 - **Store-based access control**: Store Managers automatically scoped to assigned store
@@ -336,31 +320,29 @@ GET   /api/data/routes         — Logistics routes with shipment status
 - [x] Store-based user scoping for Store Managers
 - [x] Real-time data sync with database fallback
 - [x] User provisioning with audit logging
-- [x] Anomaly detection framework (Isolation Forest)
-- [x] Demand forecasting engine (Exponential Smoothing)
+- [x] Anomaly detection framework (Isolation Forest - API)
+- [x] Demand forecasting engine (Exponential Smoothing - API)
 - [x] Python ML microservice (FastAPI + scikit-learn)
 - [x] Hybrid Node.js + Python architecture
-- [x] **Frontend UI for ML anomaly detection with severity indicators**
-- [x] **Frontend UI for demand forecasting with interactive charts**
-- [x] **Real-time ML Insights Dashboard with 3-tab interface (Anomalies/Forecasts/Status)**
-- [x] **ML Service gateway router in Node.js backend**
+- [x] ML Service gateway router in Node.js backend
+- [x] Core inventory and logistics management
 
 **In Progress**
 - [ ] ML model versioning and A/B testing (MLflow)
 - [ ] Advanced time series forecasting (Prophet, ARIMA)
-- [ ] Forecast result caching for performance optimization
-- [ ] Feature exporters for Jupyter notebooks
+- [ ] Forecast result caching
 - [ ] Advanced permission matrix customization
 - [ ] Audit log dashboard and export
 
 **Upcoming**
 - [ ] TensorFlow models for advanced demand forecasting
 - [ ] Autonomous reorder engine with anomaly-triggered alerts
-- [ ] Real-time event streaming (WebSocket updates for ML dashboard)
+- [ ] Real-time event streaming (WebSocket updates)
 - [ ] Multi-tenant enterprise architecture enhancements
 - [ ] AI workflow automation for supply chain decisions
 - [ ] Mobile app for field operations
 - [ ] GPU support for ML model training
+- [ ] Optional: ML visualization UI (dashboard components available)
 
 ---
 
