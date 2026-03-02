@@ -13,10 +13,10 @@
 ![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?style=flat-square&logo=google&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
 
 </div>
 
@@ -27,6 +27,35 @@
 PODS is an **AI-native supply chain intelligence platform** that transforms operational data into real-time decisions.
 
 Rather than dashboards that only visualize metrics, PODS continuously analyzes inventory and logistics signals to surface risks, insights, and recommended actions before problems escalate.
+
+---
+
+## The Problem
+
+Modern supply chains operate reactively:
+
+- Inventory issues are detected only after stockouts occur
+- Dashboards surface data but require manual interpretation to act on
+- Forecasting tools operate in silos, disconnected from live operations
+- Teams spend hours analyzing data instead of acting on it
+
+**PODS converts operational data into proactive decisions.**
+
+---
+
+## Vision
+
+PODS is built to become the **AI operating system for physical operations** — enabling supply chains to shift from reactive management to autonomous, intelligent decision-making.
+
+---
+
+## Why PODS is Different
+
+- **AI explains *why*, not just what** — root cause reasoning, not just anomaly flags
+- **Roles embedded into intelligence** — every insight is scoped to operational responsibility
+- **Hybrid AI + deterministic fallback** — Gemini powers decisions; database ensures zero downtime
+- **Independently scalable ML** — Python microservice scales separately from the API layer
+- **Natural language interface** — operators query the system in plain English, no SQL needed
 
 ---
 
@@ -116,19 +145,20 @@ Node.js Backend (Port 3001)          Python ML Service (Port 5000)
 
 ## Quick Start
 
-### Requirements
-
-- Node.js 18+
-- PostgreSQL 14+
-- Google Gemini API key
-- Docker *(optional, for containerized deployment)*
-
-### Setup
+### 30-Second Setup (Docker)
 
 ```bash
 git clone https://github.com/fulkruhm/podspro.git
 cd podspro
+cp .env.example .env        # Add your Gemini API key
+docker-compose up --build
 ```
+
+Open **http://localhost** — you're running.
+
+### Manual Setup
+
+**Requirements:** Node.js 18+, PostgreSQL 14+, Google Gemini API key
 
 **Backend `.env`**
 ```env
@@ -214,6 +244,38 @@ GET  /api/data/routes       — Logistics routes and shipment status
 
 ---
 
+## Reliability
+
+PODS is designed to stay operational under degraded conditions.
+
+**Graceful AI Degradation** — When the Gemini API is unavailable, the system automatically falls back to live database snapshots. Operators never face a broken experience.
+
+**Health Monitoring** — All services expose `/health` endpoints. Docker Compose health checks ensure dependent services only start when dependencies are ready.
+
+**Structured Logging** — Request lifecycle, auth events, and ML inference results are logged with consistent structure, enabling traceability across the Node.js and Python layers.
+
+**ML Service Isolation** — The Python microservice fails independently. A crash or overload in the ML layer does not affect core inventory, auth, or AI chat functionality.
+
+---
+
+## Engineering Standards
+
+PODS is built with production reliability and maintainability as first-class concerns.
+
+**Type Safety** — Strict TypeScript enforced across both frontend and backend, eliminating runtime type errors and improving IDE-driven development.
+
+**Service-Layer Architecture** — Business logic is cleanly separated from routing and data access layers, making each component independently testable and replaceable.
+
+**Input Validation** — All API inputs validated server-side using Zod schemas, ensuring malformed or malicious payloads are rejected before reaching business logic.
+
+**Security** — Login endpoint protected with rate limiting and exponential backoff. CORS policies and security headers enforced at the Nginx layer.
+
+**Configuration Management** — All environment-specific values externalized via `.env` files, keeping secrets out of source control and enabling clean dev/staging/prod parity.
+
+**Container-First Deployment** — Every service containerized and orchestrated with Docker Compose, ensuring consistent, reproducible environments from local development to production.
+
+---
+
 ## Roadmap
 
 **Completed**
@@ -241,27 +303,9 @@ GET  /api/data/routes       — Logistics routes and shipment status
 
 ---
 
-## Engineering Standards
+## Contributing
 
-PODS is built with production reliability and maintainability as first-class concerns.
-
-**Type Safety** — Strict TypeScript enforced across both frontend and backend, eliminating runtime type errors and improving IDE-driven development.
-
-**Service-Layer Architecture** — Business logic is cleanly separated from routing and data access layers, making each component independently testable and replaceable.
-
-**Input Validation** — All API inputs are validated server-side using Zod schemas, ensuring malformed or malicious payloads are rejected before reaching business logic.
-
-**Security** — Login endpoint protected with rate limiting and exponential backoff. CORS policies and security headers enforced at the Nginx layer.
-
-**Configuration Management** — All environment-specific values are externalized via `.env` files, keeping secrets out of source control and enabling clean dev/staging/prod parity.
-
-**Container-First Deployment** — Every service is containerized and orchestrated with Docker Compose, ensuring consistent, reproducible environments from local development to production.
-
----
-
-## Vision
-
-PODS is built to become the **AI operating system for physical operations** — enabling supply chains to shift from reactive management to autonomous, intelligent decision-making.
+Currently maintained by the core team. Issues, bug reports, and feature discussions are welcome — open an issue or start a discussion on GitHub.
 
 ---
 
