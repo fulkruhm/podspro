@@ -26,7 +26,7 @@
 
 PODS is an **AI-native operational intelligence platform for supply chains** that transforms operational data into real-time decisions.
 
-Rather than dashboards that only visualize metrics, PODS continuously analyzes inventory and logistics signals to surface risks, insights, and recommended actions before problems escalate.
+Rather than dashboards that only visualize metrics, PODS continuously analyzes operational signals across inventory and logistics networks to surface risks, insights, and recommended actions before problems escalate.
 
 *Built for retail operators, logistics teams, and supply chain analysts managing multi-location inventory networks.*
 
@@ -71,7 +71,22 @@ PODS is built to become the **AI operating system for physical operations** — 
 
 ---
 
-## AI Advisor in Action
+## Product Preview
+
+<div align="center">
+
+**Dashboard — Executive Portfolio Command**
+![Dashboard](assets/dashboard.png)
+
+**AI Advisor — Natural Language Operational Intelligence**
+![AI Advisor](assets/ai_advisor.png)
+
+**Secure Login — Node Authorization**
+![Login](assets/login.png)
+
+</div>
+
+
 
 A natural language query becomes an operational decision in seconds:
 
@@ -87,6 +102,16 @@ Recommended Actions:
   → Trigger reorder suggestion
   → Reallocate excess inventory from Store 09
 ```
+
+---
+
+## Example Workflow
+
+1. **Logistics delay detected** — Shipment on route TX-3 falls behind schedule
+2. **ML service flags anomaly** — Isolation Forest identifies abnormal inventory depletion at Store 14
+3. **AI explains root cause** — Gemini correlates the delay with a 27% demand spike in beverages
+4. **Operator accepts recommendation** — Reorder suggestion surfaced in plain language via the AI Advisor
+5. **Inventory rebalanced** — Excess stock reallocated from Store 09, stockout avoided
 
 ---
 
@@ -127,6 +152,14 @@ Four-tier permission system scoped to operational responsibility:
 ---
 
 ## Architecture
+
+User requests flow through the Node.js API layer, enriched with operational context, optionally analyzed by the ML service, and persisted in PostgreSQL before responses are returned in real time.
+
+<div align="center">
+
+![PODS Architecture](assets/architecture.png)
+
+</div>
 
 PODS uses a **microservice architecture** combining Node.js and Python for their respective strengths:
 
@@ -314,6 +347,15 @@ PODS is built with production reliability and maintainability as first-class con
 - [ ] Real-time event streaming via WebSockets
 - [ ] Mobile app for field operations
 - [ ] Multi-tenant enterprise architecture
+
+---
+
+## Design Principles
+
+- Operational decisions over dashboards
+- Explainability before automation
+- Graceful degradation over hard failure
+- AI as augmentation, not replacement
 
 ---
 
