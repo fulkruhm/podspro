@@ -24,9 +24,21 @@
 
 ## What is PODS?
 
-PODS is an **AI-native supply chain intelligence platform** that transforms operational data into real-time decisions.
+PODS is an **AI-native operational intelligence platform for supply chains** that transforms operational data into real-time decisions.
 
 Rather than dashboards that only visualize metrics, PODS continuously analyzes inventory and logistics signals to surface risks, insights, and recommended actions before problems escalate.
+
+*Built for retail operators, logistics teams, and supply chain analysts managing multi-location inventory networks.*
+
+---
+
+## Key Features
+
+- AI-powered operational advisor with natural language interface
+- Real-time inventory intelligence across multiple locations
+- Demand forecasting and anomaly detection via ML microservice
+- Role-aware insights scoped to operational responsibility
+- Hybrid AI + deterministic fallback for zero-downtime reliability
 
 ---
 
@@ -274,6 +286,8 @@ PODS is built with production reliability and maintainability as first-class con
 
 **Container-First Deployment** — Every service containerized and orchestrated with Docker Compose, ensuring consistent, reproducible environments from local development to production.
 
+**Testing Strategy** — Service-layer unit tests and API validation ensure predictable behavior across releases.
+
 ---
 
 ## Roadmap
@@ -300,6 +314,12 @@ PODS is built with production reliability and maintainability as first-class con
 - [ ] Real-time event streaming via WebSockets
 - [ ] Mobile app for field operations
 - [ ] Multi-tenant enterprise architecture
+
+---
+
+## Status
+
+Active development — production-oriented architecture with ongoing feature expansion.
 
 ---
 
