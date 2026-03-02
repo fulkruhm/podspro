@@ -25,7 +25,7 @@
 
 PODS is an **AI-native supply chain intelligence platform** that transforms operational data into real-time decisions.
 
-Rather than dashboards that only visualize metrics, PODS acts as an **operational co-pilot** — continuously analyzing inventory and logistics signals to surface risks, insights, and recommended actions before problems escalate.
+Rather than dashboards that only visualize metrics, PODS continuously analyzes inventory and logistics signals to surface risks, insights, and recommended actions before problems escalate.
 
 ---
 
@@ -231,7 +231,6 @@ GET  /api/data/routes       — Logistics routes and shipment status
 - [ ] ML model versioning and A/B testing (MLflow)
 - [ ] Advanced time series forecasting (Prophet, ARIMA)
 - [ ] Audit log dashboard and export
-- [ ] Advanced permission matrix customization
 
 **Upcoming**
 - [ ] Autonomous reorder engine with anomaly-triggered alerts
