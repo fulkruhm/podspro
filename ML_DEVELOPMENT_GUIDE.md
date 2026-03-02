@@ -216,6 +216,127 @@ async def predict(data):
 
 ---
 
+## Frontend Integration
+
+The React frontend consumes the ML service through a TypeScript client (`frontend/services/mlService.ts`):
+
+### Frontend Components
+
+1. **MLDashboard** (`frontend/components/MLDashboard.tsx`)
+   - Main container for ML insights with 3 tabs:
+     - Anomaly Scanner (uses `detectAnomalies`)
+     - Demand Forecaster (uses `forecastDemand`)
+     - Service Status (uses `checkMLHealth`)
+
+2. **AnomalyVisualization** (`frontend/components/AnomalyVisualization.tsx`)
+   - Interactive anomaly scanner with severity-based coloring
+   - Adjustable sensitivity slider
+   - Real-time scanning button
+   - Shows recommendations
+
+3. **ForecastVisualization** (`frontend/components/ForecastVisualization.tsx`)
+   - Product selector and period selector
+   - Interactive Recharts area chart
+   - Confidence interval visualization
+   - Trend analysis (📈 Increasing, 📉 Decreasing, ➡️ Stable)
+
+### TypeScript Client Usage
+
+```typescript
+import { detectAnomalies, forecastDemand, checkMLHealth } from '../services/mlService';
+
+// Example 1: Detect anomalies
+const anomalies = await detectAnomalies(products, 0.05);
+console.log(anomalies);  // Array of AnomalyResult[]
+
+// Example 2: Forecast demand
+const forecast = await forecastDemand({
+  product_id: "PROD_001",
+  store_id: "STORE_001",
+  historical_demand: [20, 22, 19, 25, 23, 21, 24],
+  forecast_days: 7
+});
+console.log(forecast.forecast);  // [24.2, 24.5, 24.8, ...]
+
+// Example 3: Check ML service health
+const health = await checkMLHealth();
+console.log(health.status);  // "healthy" or error
+```
+
+### Flow: Frontend → Backend → ML Service
+
+```
+User clicks "Scan Anomalies" in React
+        ↓
+AnomalyVisualization.tsx calls detectAnomalies()
+        ↓
+mlService.ts sends: POST /api/ml/anomalies/detect
+        ↓
+Backend (mlRoutes.ts) receives request
+        ↓
+Backend forwards to Python ML service
+        ↓
+Python service runs Isolation Forest
+        ↓
+Returns: { is_anomaly, anomaly_score, reason, recommended_action }
+        ↓
+Frontend renders severity-colored alerts
+```
+
+### Example: Using ML in a Component
+
+```typescript
+import { useEffect, useState } from 'react';
+import { detectAnomalies } from '../services/mlService';
+import { AnomalyResult } from '../types';
+
+export function MyMLComponent({ products }) {
+  const [anomalies, setAnomalies] = useState<AnomalyResult[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleScan = async (sensitivity: number) => {
+    setLoading(true);
+    try {
+      const results = await detectAnomalies(products, sensitivity);
+      setAnomalies(results);
+    } catch (error) {
+      console.error('Scan failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={() => handleScan(0.05)} disabled={loading}>
+        {loading ? 'Scanning...' : 'Scan for Anomalies'}
+      </button>
+      
+      {anomalies.map(anomaly => (
+        <div key={anomaly.product_id}>
+          <p>Product: {anomaly.product_id}</p>
+          <p>Anomaly Score: {(anomaly.anomaly_score * 100).toFixed(1)}%</p>
+          <p>Reason: {anomaly.reason}</p>
+          {anomaly.is_anomaly && (
+            <p style={{ color: 'red' }}>⚠️ {anomaly.recommended_action}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Frontend Roles & Access
+
+ML Insights dashboard is visible to:
+- ✅ System Admin (sysadmin)
+- ✅ Logistics User (logistics_user)
+- ✅ Admin (admin)
+- ❌ Store User (store_user)
+
+---
+
 ## Testing
 
 ### Unit Tests

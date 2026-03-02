@@ -95,7 +95,7 @@ async def health_check():
 # ============================================================================
 
 class AnomalyDetector:
-    """Isolation Forest-based anomaly detection for inventory"""
+    """Hybrid anomaly detection: Rule-based + Isolation Forest"""
 
     def __init__(self, contamination: float = 0.05):
         self.model = IsolationForest(
@@ -106,7 +106,7 @@ class AnomalyDetector:
         self.scaler = StandardScaler()
 
     def detect(self, datapoints: List[InventoryDatapoint]) -> List[AnomalyResult]:
-        """Detect anomalies in inventory data"""
+        """Detect anomalies in inventory data using hybrid approach"""
         if not datapoints:
             return []
 
@@ -121,48 +121,136 @@ class AnomalyDetector:
         results = []
 
         for (product_id, store_id), group in grouped.items():
-            if len(group) < 3:
-                # Not enough data for anomaly detection
-                continue
-
-            # Extract features
-            stocks = np.array([dp.current_stock for dp in group]).reshape(-1, 1)
-            demands = np.array([dp.avg_daily_demand for dp in group]).reshape(-1, 1)
-
-            # Combine features
-            features = np.concatenate([stocks, demands], axis=1)
-
-            # Normalize
-            features_scaled = self.scaler.fit_transform(features)
-
-            # Detect anomalies
-            predictions = self.model.fit_predict(features_scaled)
-            scores = self.model.score_samples(features_scaled)
-
-            # Get latest point anomaly status
-            latest_idx = len(group) - 1
-            is_anomaly = predictions[latest_idx] == -1
-            anomaly_score = 1 / (1 + np.exp(-scores[latest_idx]))  # Sigmoid normalize
-
-            # Generate reason and recommendation
-            latest_dp = group[latest_idx]
-            reason, action = self._explain_anomaly(
-                latest_dp,
-                group,
-                is_anomaly,
-                anomaly_score
+            # Always check latest datapoint against rule-based detection first
+            latest_dp = group[-1]
+            
+            # Rule-based anomaly detection (high priority)
+            rule_anomaly, rule_score, rule_reason, rule_action = self._detect_rule_based(
+                latest_dp, 
+                group
             )
+            
+            # If rule-based detected anomaly, use it
+            if rule_anomaly:
+                results.append(AnomalyResult(
+                    product_id=product_id,
+                    store_id=store_id,
+                    is_anomaly=True,
+                    anomaly_score=float(rule_score),
+                    reason=rule_reason,
+                    recommended_action=rule_action
+                ))
+                continue
+            
+            # Otherwise, try statistical anomaly detection
+            if len(group) >= 3:
+                # Extract features
+                stocks = np.array([dp.current_stock for dp in group]).reshape(-1, 1)
+                demands = np.array([dp.avg_daily_demand for dp in group]).reshape(-1, 1)
 
-            results.append(AnomalyResult(
-                product_id=product_id,
-                store_id=store_id,
-                is_anomaly=is_anomaly,
-                anomaly_score=float(anomaly_score),
-                reason=reason,
-                recommended_action=action
-            ))
+                # Combine features
+                features = np.concatenate([stocks, demands], axis=1)
+
+                # Normalize
+                try:
+                    features_scaled = self.scaler.fit_transform(features)
+
+                    # Detect anomalies
+                    predictions = self.model.fit_predict(features_scaled)
+                    scores = self.model.score_samples(features_scaled)
+
+                    # Get latest point anomaly status
+                    latest_idx = len(group) - 1
+                    is_anomaly = predictions[latest_idx] == -1
+                    anomaly_score = 1 / (1 + np.exp(-scores[latest_idx]))  # Sigmoid normalize
+
+                    # Generate reason and recommendation
+                    reason, action = self._explain_anomaly(
+                        latest_dp,
+                        group,
+                        is_anomaly,
+                        anomaly_score
+                    )
+
+                    # Only add if anomaly detected by Isolation Forest
+                    if is_anomaly:
+                        results.append(AnomalyResult(
+                            product_id=product_id,
+                            store_id=store_id,
+                            is_anomaly=is_anomaly,
+                            anomaly_score=float(anomaly_score),
+                            reason=reason,
+                            recommended_action=action
+                        ))
+                except Exception as e:
+                    # Skip statistical detection if it fails
+                    pass
 
         return results
+
+    def _detect_rule_based(
+        self, 
+        current: InventoryDatapoint, 
+        history: List[InventoryDatapoint]
+    ) -> tuple:
+        """Rule-based anomaly detection for immediate issues"""
+        
+        if len(history) < 2:
+            return False, 0.0, "", ""
+
+        # Calculate historical averages (use last 7 points or all if less)
+        recent_history = history[-7:]
+        avg_stock = np.mean([dp.current_stock for dp in recent_history])
+        avg_demand = np.mean([dp.avg_daily_demand for dp in recent_history])
+        
+        # Rule 1: Stock critically low (< 20% of average)
+        if avg_stock > 0 and current.current_stock < avg_stock * 0.2:
+            return (
+                True,
+                0.95,
+                f"🚨 CRITICAL: Stock level ({current.current_stock}) critically low (avg: {avg_stock:.0f})",
+                "⚠️ EMERGENCY REORDER REQUIRED - Stock at only {:.0f}% of average".format(
+                    (current.current_stock / avg_stock * 100) if avg_stock > 0 else 0
+                )
+            )
+        
+        # Rule 2: Stock very high (> 250% of average)
+        if avg_stock > 0 and current.current_stock > avg_stock * 2.5:
+            return (
+                True,
+                0.80,
+                f"⚠️ WARNING: Stock level ({current.current_stock}) unusually high (avg: {avg_stock:.0f})",
+                "📦 Consider promotional campaign or warehouse redistribution"
+            )
+        
+        # Rule 3: Extreme demand spike (> 200% of average)
+        if avg_demand > 0 and current.avg_daily_demand > avg_demand * 2.0:
+            return (
+                True,
+                0.85,
+                f"📈 DEMAND SURGE: Demand ({current.avg_daily_demand:.1f}) extreme (avg: {avg_demand:.1f})",
+                "🚀 Immediately increase replenishment - possible market surge detected"
+            )
+        
+        # Rule 4: Moderate stock depletion (40-60% below average)
+        if avg_stock > 0 and current.current_stock < avg_stock * 0.4 and current.current_stock >= avg_stock * 0.2:
+            return (
+                True,
+                0.70,
+                f"⚠️ Low stock: Level ({current.current_stock}) below average (avg: {avg_stock:.0f})",
+                "📦 Plan reorder within 24 hours"
+            )
+        
+        # Rule 5: Moderate demand increase (150-200% of average)
+        if avg_demand > 0 and current.avg_daily_demand > avg_demand * 1.5 and current.avg_daily_demand <= avg_demand * 2.0:
+            return (
+                True,
+                0.60,
+                f"📈 Demand rise: Level ({current.avg_daily_demand:.1f}) above average (avg: {avg_demand:.1f})",
+                "🚀 Increase replenishment frequency"
+            )
+        
+        return False, 0.0, "", ""
 
     def _explain_anomaly(
         self,

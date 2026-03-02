@@ -12,10 +12,10 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, onLogout }) => {
   const allItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', roles: ['admin', 'store_user', 'logistics_user', 'sysadmin'] },
-    { id: 'usermanagement', label: 'User Management', icon: '👥', roles: ['sysadmin'] },
-    { id: 'inventory', label: 'Inventory Engine', icon: '📦', roles: ['admin', 'store_user', 'sysadmin'] },
+    { id: 'inventory', label: 'Inventory Engine', icon: '📦', roles: ['admin', 'store_user', 'sysadmin'], description: 'Store-level product insights' },
     { id: 'logistics', label: 'Logistics Engine', icon: '🚛', roles: ['admin', 'logistics_user', 'sysadmin'] },
     { id: 'assistant', label: 'AI Advisor', icon: '🤖', roles: ['admin', 'store_user', 'logistics_user', 'sysadmin'] },
+    { id: 'usermanagement', label: 'User Management', icon: '👥', roles: ['sysadmin'] },
     { id: 'profile', label: 'User Profile', icon: '👤', roles: ['admin', 'store_user', 'logistics_user', 'sysadmin'] },
   ];
 

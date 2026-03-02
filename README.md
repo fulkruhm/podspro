@@ -218,6 +218,28 @@ Access:
 
 ## ✨ Recent Features & Improvements
 
+### ML Insights Dashboard 📊 (NEW!)
+Real-time visualization and monitoring of ML predictions:
+- **Anomaly Detection Interface**: Interactive scanner with live anomaly detection
+  - Adjustable sensitivity (1-20%) for fine-tuned detection
+  - Severity-based alerts (critical/warning/info) with color coding
+  - Root cause analysis and actionable recommendations
+  - Anomaly score visualization with progress indicators
+- **Demand Forecasting Tool**: Advanced forecasting with interactive visualization
+  - Configurable forecast periods (7, 14, or 30 days)
+  - Interactive chart with confidence intervals (upper/lower bounds)
+  - Trend analysis (📈 Increasing, 📉 Decreasing, ➡️ Stable)
+  - Detailed forecast table with daily predictions
+- **ML Service Monitor**: Real-time health and status dashboard
+  - Service capabilities and technology stack display
+  - Optional auto-refresh every 30 seconds
+  - Health-based UI state management
+- **Components:**
+  - `MLDashboard.tsx` - Main dashboard with 3-tab interface
+  - `AnomalyVisualization.tsx` - Live anomaly scanner
+  - `ForecastVisualization.tsx` - Forecast with Recharts charts
+  - `mlService.ts` - TypeScript ML API client
+
 ### Python ML Microservice 🐍
 - **Hybrid Architecture**: FastAPI microservice for ML/AI alongside Node.js backend
 - **Anomaly Detection**: Isolation Forest for inventory anomalies with explainable results
@@ -318,22 +340,27 @@ GET   /api/data/routes         — Logistics routes with shipment status
 - [x] Demand forecasting engine (Exponential Smoothing)
 - [x] Python ML microservice (FastAPI + scikit-learn)
 - [x] Hybrid Node.js + Python architecture
+- [x] **Frontend UI for ML anomaly detection with severity indicators**
+- [x] **Frontend UI for demand forecasting with interactive charts**
+- [x] **Real-time ML Insights Dashboard with 3-tab interface (Anomalies/Forecasts/Status)**
+- [x] **ML Service gateway router in Node.js backend**
 
 **In Progress**
-- [ ] Frontend store filtering and view isolation
 - [ ] ML model versioning and A/B testing (MLflow)
 - [ ] Advanced time series forecasting (Prophet, ARIMA)
+- [ ] Forecast result caching for performance optimization
 - [ ] Feature exporters for Jupyter notebooks
 - [ ] Advanced permission matrix customization
 - [ ] Audit log dashboard and export
 
 **Upcoming**
-- [ ] Predictive demand forecasting
-- [ ] Autonomous reorder engine
-- [ ] Real-time event streaming
-- [ ] Multi-tenant enterprise architecture
-- [ ] AI workflow automation
+- [ ] TensorFlow models for advanced demand forecasting
+- [ ] Autonomous reorder engine with anomaly-triggered alerts
+- [ ] Real-time event streaming (WebSocket updates for ML dashboard)
+- [ ] Multi-tenant enterprise architecture enhancements
+- [ ] AI workflow automation for supply chain decisions
 - [ ] Mobile app for field operations
+- [ ] GPU support for ML model training
 
 ---
 

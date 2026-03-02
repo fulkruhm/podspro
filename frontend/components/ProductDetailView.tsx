@@ -30,7 +30,7 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Sync local state when product prop changes (e.g. from external update)
+  // Sync local state when product prop changes
   useEffect(() => {
     setRopValue(product.reorderPoint);
     setSafetyStockValue(product.safetyStock);
@@ -399,39 +399,39 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Metric Glossary */}
-      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-        <h3 className="font-bold text-slate-900 mb-4 flex items-center">
-          <AlertCircle className="h-5 w-5 mr-2 text-indigo-600" />
-          Analyst Metric Glossary
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div>
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Shrink Rate</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">Percentage of inventory lost due to theft, damage, spoilage, or administrative errors. High rates in Produce/Dairy often indicate cold chain issues.</p>
-          </div>
-          <div>
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Markdown Rate</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">The percentage of stock sold at a discount. High markdown rates suggest over-ordering or poor demand forecasting for perishable goods.</p>
-          </div>
-          <div>
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">OOS Days</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">"Out of Stock" days in the last 30-day window. Directly correlates to lost revenue and potential customer churn to competitors.</p>
-          </div>
-          <div>
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Turnover Rate</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">Calculated as (Cost of Goods Sold / Average Inventory). Measures how efficiently stock is moving through the node.</p>
-          </div>
-          <div>
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Lead Time</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">The duration between placing a replenishment order and the stock becoming available for sale. Critical for ROP calculations.</p>
-          </div>
-          <div>
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Safety Stock</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">The "buffer" inventory held to protect against demand spikes or supply delays. Optimized based on service level targets (e.g., 98%).</p>
+          {/* Metric Glossary */}
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+            <h3 className="font-bold text-slate-900 mb-4 flex items-center">
+              <AlertCircle className="h-5 w-5 mr-2 text-indigo-600" />
+              Analyst Metric Glossary
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Shrink Rate</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">Percentage of inventory lost due to theft, damage, spoilage, or administrative errors. High rates in Produce/Dairy often indicate cold chain issues.</p>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Markdown Rate</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">The percentage of stock sold at a discount. High markdown rates suggest over-ordering or poor demand forecasting for perishable goods.</p>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">OOS Days</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">"Out of Stock" days in the last 30-day window. Directly correlates to lost revenue and potential customer churn to competitors.</p>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Turnover Rate</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">Calculated as (Cost of Goods Sold / Average Inventory). Measures how efficiently stock is moving through the node.</p>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Lead Time</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">The duration between placing a replenishment order and the stock becoming available for sale. Critical for ROP calculations.</p>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-1">Safety Stock</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">The "buffer" inventory held to protect against demand spikes or supply delays. Optimized based on service level targets (e.g., 98%).</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -289,6 +289,128 @@ curl -X POST http://ml-service:5000/api/ml/anomalies/detect \
 
 ---
 
+## Frontend ML Insights Dashboard
+
+### 🎨 Components Overview
+
+The React frontend includes three visualization components for ML insights:
+
+#### 1. **MLDashboard** (`frontend/components/MLDashboard.tsx`)
+- Main dashboard container with 3-tab interface
+- **Tab 1: Anomaly Scanner** - Real-time anomaly detection with adjustable sensitivity
+- **Tab 2: Demand Forecaster** - Interactive demand forecasting with product selector
+- **Tab 3: Service Status** - ML service health monitoring
+- Auto-refresh capability (optional)
+- Role-based access (admin, logistics_user, sysadmin only)
+
+#### 2. **AnomalyVisualization** (`frontend/components/AnomalyVisualization.tsx`)
+Anomaly detection scanner with:
+- Adjustable sensitivity slider (1-20%)
+- "Scan Now" button for real-time detection
+- Severity-based color coding:
+  - 🔴 **Critical (Red):** Anomaly score > 0.8
+  - 🟡 **Warning (Yellow):** Anomaly score 0.5-0.8
+  - 🔵 **Info (Blue):** Anomaly score < 0.5
+- Anomaly score progress bar
+- Root cause analysis showing reason (e.g., "Stock level critically low")
+- Actionable recommendations (emergency reorder, promotion, etc.)
+- "All systems normal" message when no anomalies detected
+
+#### 3. **ForecastVisualization** (`frontend/components/ForecastVisualization.tsx`)
+Advanced demand forecasting with:
+- Product selector dropdown
+- Forecast period selector (7/14/30 days)
+- **Interactive Area Chart:**
+  - Blue line: Forecast predictions
+  - Light blue shade: Confidence interval (upper/lower bounds)
+  - Powered by Recharts
+- **Summary Cards:**
+  - Trend (📈 Increasing, 📉 Decreasing, ➡️ Stable)
+  - Average Demand
+  - Confidence Range
+- **Detail Table:** Day-by-day forecast breakdown
+
+### 📡 ML Service Client (`frontend/services/mlService.ts`)
+
+TypeScript API client for communicating with ML endpoints:
+
+```typescript
+// Detect anomalies with adjustable sensitivity
+const anomalies = await detectAnomalies(datapoints, sensitivity);
+
+// Forecast future demand
+const forecast = await forecastDemand({
+  product_id: "PRODUCT_001",
+  store_id: "STORE_001",
+  historical_demand: [...],
+  forecast_days: 7
+});
+
+// Check ML service health
+const health = await checkMLHealth();
+
+// Run combined analysis (anomalies + forecast)
+const results = await runBatchAnalysis(params);
+```
+
+### 🔗 Frontend → Backend → Python Flow
+
+```
+React Component (MLDashboard)
+        ↓
+TypeScript Client (mlService.ts)
+        ↓ /api/ml/anomalies/detect
+Node.js Backend (mlRoutes.ts)
+        ↓
+Python FastAPI Service
+        ↓
+Anomaly Detection (Isolation Forest)
+        ↓
+Response JSON → Visualization
+```
+
+### 📊 Using the Dashboard
+
+**Access:** Navigate to **ML Insights** tab in sidebar (🧠 icon)
+
+**Supported User Roles:**
+- ✅ System Admin (sysadmin)
+- ✅ Logistics User (logistics_user)
+- ✅ Admin (admin)
+- ❌ Store User (store_user) - Dashboard hidden
+
+**Features by Tab:**
+
+| Tab | Use Case | Input |
+|---|---|---|
+| **Anomalies** | Find inventory/demand outliers | Sensitivity slider (auto-fetches data) |
+| **Forecasting** | Plan inventory levels | Product + Period selection |
+| **Status** | Monitor ML service health | Real-time health endpoint |
+
+### 💻 Example Integration Code
+
+```typescript
+// In a React component:
+import { detectAnomalies } from '../services/mlService';
+
+function MyComponent() {
+  const [anomalies, setAnomalies] = useState([]);
+  
+  const handleScan = async (sensitivity: number) => {
+    const results = await detectAnomalies(products, sensitivity);
+    setAnomalies(results);
+  };
+  
+  return (
+    <button onClick={() => handleScan(0.05)}>
+      Scan for Anomalies
+    </button>
+  );
+}
+```
+
+---
+
 ## Error Handling
 
 ### Service Unavailable

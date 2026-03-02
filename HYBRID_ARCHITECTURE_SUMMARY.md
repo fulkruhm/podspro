@@ -133,6 +133,10 @@ ml-service:
 ```
 ┌─────────────────────────────────────────┐
 │  React Frontend (Port 5173)              │
+│  ✓ MLDashboard (3-tab interface)         │
+│  ✓ AnomalyVisualization Component        │
+│  ✓ ForecastVisualization Component       │
+│  ✓ ML Service Client (mlService.ts)      │
 └──────────────────┬──────────────────────┘
                    │
 ┌──────────────────▼──────────────────────┐
@@ -146,7 +150,7 @@ ml-service:
          ┌─────────┴──────────┐
          │                    │
     PostgreSQL          Python ML Service
-    Port 5432           Port 5000
+    Port 5432           Port 5001
                         ✓ Anomaly Detection
                         ✓ Forecasting
                         ✓ ML Analytics
@@ -290,14 +294,20 @@ mlflow.sklearn.log_model(model, "trained_model")
 
 ---
 
-## Files Modified
+## Files Modified & Created
 
-| File | Changes |
-|------|---------|
-| `docker-compose.yml` | Added ml-service container |
-| `backend/src/server.ts` | Added mlRouter import and mount |
-| `backend/src/routes/mlRoutes.ts` | **NEW** - Gateway to Python service |
-| `README.md` | Updated tech stack, architecture, features, roadmap |
+| File | Type | Changes |
+|------|------|---------|
+| `docker-compose.yml` | Modified | Added ml-service container, port changed to 5001 |
+| `backend/src/server.ts` | Modified | Added mlRouter import and mount |
+| `backend/src/routes/mlRoutes.ts` | **NEW** | Gateway to Python service |
+| `frontend/services/mlService.ts` | **NEW** | TypeScript client for ML endpoints |
+| `frontend/components/MLDashboard.tsx` | **NEW** | Main dashboard with 3-tab interface |
+| `frontend/components/AnomalyVisualization.tsx` | **NEW** | Anomaly detection scanner with severity indicators |
+| `frontend/components/ForecastVisualization.tsx` | **NEW** | Demand forecasting with Recharts visualization |
+| `frontend/App.tsx` | Modified | Added ML Insights tab routing |
+| `frontend/Sidebar.tsx` | Modified | Added ML Insights menu item (🧠) |
+| `README.md` | Updated | Added ML Dashboard features, updated roadmap |
 
 ---
 
@@ -363,16 +373,23 @@ curl http://localhost:3001/api/ml/health
 
 ---
 
+## Completed Features ✅
+
+1. **Frontend UI** for anomaly/forecast visualization ✓ (AnomalyVisualization, ForecastVisualization)
+2. **Real-time Dashboard** showing ML insights ✓ (MLDashboard with 3-tab interface)
+3. **Frontend ML Service Client** for TypeScript integration ✓ (mlService.ts)
+4. **Sidebar Navigation** integration with ML Insights menu item ✓
+
 ## Next Steps (Optional Enhancements)
 
-1. **Add Frontend UI** for anomaly/forecast visualization
-2. **Implement Real-time Dashboard** showing ML insights
-3. **Add TensorFlow Models** for advanced forecasting
-4. **Integrate MLflow** for model versioning
-5. **Create ML Model Training Pipeline** automated on new data
-6. **Add Caching** for frequently requested forecasts
-7. **Implement Feature Store** with Feast
-8. **Add GPU Support** for training
+1. **Add TensorFlow Models** for advanced forecasting
+2. **Integrate MLflow** for model versioning
+3. **Create ML Model Training Pipeline** automated on new data
+4. **Add Caching** for frequently requested forecasts
+5. **Implement Feature Store** with Feast
+6. **Add GPU Support** for training
+7. **Real-time WebSocket streaming** for live dashboard updates
+8. **Advanced ARIMA/Prophet models** for seasonal forecasting
 
 ---
 

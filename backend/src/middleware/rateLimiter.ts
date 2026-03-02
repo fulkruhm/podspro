@@ -85,11 +85,11 @@ export function createRateLimiter(options: Partial<RateLimitOptions> = {}) {
 }
 
 /**
- * Stricter rate limiter for authentication endpoints
+ * Moderate rate limiter for authentication endpoints
  */
 export const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 5, // 5 requests per 15 minutes
+  maxRequests: 20, // 20 requests per 15 minutes (allows testing/retries)
   message: 'Too many login attempts, please try again later',
 });
 
@@ -97,15 +97,24 @@ export const authLimiter = createRateLimiter({
  * Standard rate limiter for general API endpoints
  */
 export const apiLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 100, // 100 requests per 15 minutes
+  windowMs: 1 * 60 * 1000, // 1 minute
+  maxRequests: 300, // 300 requests per minute (handles Regional Analytics concurrent requests)
 });
 
 /**
- * Strict rate limiter for resource-intensive operations
+ * Moderate rate limiter for resource-intensive operations
  */
 export const strictLimiter = createRateLimiter({
   windowMs: 60 * 1000, // 1 minute
-  maxRequests: 10, // 10 requests per minute
+  maxRequests: 30, // 30 requests per minute
   message: 'Too many requests, please slow down',
+});
+
+/**
+ * Lenient rate limiter for ML endpoints (forecasting, anomaly detection)
+ */
+export const mlLimiter = createRateLimiter({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  maxRequests: 500, // 500 requests per minute (handles multiple regions/products)
+  message: 'ML service rate limit exceeded. Please retry after a moment.',
 });

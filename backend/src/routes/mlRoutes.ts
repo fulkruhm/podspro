@@ -7,6 +7,7 @@
 
 import { Router, Request, Response } from 'express';
 import fetch from 'node-fetch';
+import { mlLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://ml-service:5000';
  *
  * Detects anomalies in inventory data using isolation forest
  */
-router.post('/anomalies/detect', async (req: Request, res: Response) => {
+router.post('/anomalies/detect', mlLimiter, async (req: Request, res: Response) => {
   try {
     const { datapoints, sensitivity } = req.body;
 
@@ -56,12 +57,12 @@ router.post('/anomalies/detect', async (req: Request, res: Response) => {
 });
 
 /**
- * Demand Forecasting Endpoint
+ * Demand Forecasting Endpoint (with lenient rate limiting for concurrent requests)
  * POST /api/ml/forecast
  *
  * Forecasts future demand using exponential smoothing
  */
-router.post('/forecast', async (req: Request, res: Response) => {
+router.post('/forecast', mlLimiter, async (req: Request, res: Response) => {
   try {
     const {
       product_id,
@@ -106,12 +107,12 @@ router.post('/forecast', async (req: Request, res: Response) => {
 });
 
 /**
- * Batch Analysis Endpoint
+ * Batch Analysis Endpoint (with lenient rate limiting)
  * POST /api/ml/batch-analysis
  *
  * Run multiple analyses (anomalies + forecasts) in one request
  */
-router.post('/batch-analysis', async (req: Request, res: Response) => {
+router.post('/batch-analysis', mlLimiter, async (req: Request, res: Response) => {
   try {
     const response = await fetch(`${ML_SERVICE_URL}/api/ml/batch-analysis`, {
       method: 'POST',
