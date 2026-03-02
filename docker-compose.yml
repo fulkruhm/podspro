@@ -29,6 +29,7 @@ services:
       - "3001:3001"
     environment:
       - PORT=3001
+      - AI_RESPONSE_TIMEOUT_MS=150000
       - NODE_ENV=production
       - DATABASE_URL=postgresql://pods_user:pods_password@postgres:5432/pods_db
     env_file:

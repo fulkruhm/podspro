@@ -177,6 +177,76 @@ const MOCK_PRODUCTS = [
     shrinkRate: 0.1, markdownRate: 0.0, oosDays: 0, turnoverRate: 3.5, lastRestockDate: '2026-02-16',
     forecastedDemand: [6, 7, 5, 6, 8, 7, 6]
   },
+  {
+    id: '26', name: 'Cage-Free Brown Eggs (18ct)', currentStock: 9, avgDailyDemand: 11, leadTime: 2, safetyStock: 10, reorderPoint: 32, status: 'critical', category: 'Dairy', price: 8.49, region: 'Central', store: 'River Bend Foods', department: 'Dairy',
+    historicalDemand: [12, 10, 11, 13, 14, 12, 11],
+    imageUrl: 'https://picsum.photos/seed/browneggs/800/800',
+    shrinkRate: 0.9, markdownRate: 0.3, oosDays: 4, turnoverRate: 15.4, lastRestockDate: '2026-02-21',
+    forecastedDemand: [12, 13, 11, 12, 14, 13, 12]
+  },
+  {
+    id: '27', name: 'Ground Turkey (1lb)', currentStock: 44, avgDailyDemand: 9, leadTime: 2, safetyStock: 10, reorderPoint: 28, status: 'excess', category: 'Meat', price: 7.99, region: 'Central', store: 'River Bend Foods', department: 'Meat',
+    historicalDemand: [8, 7, 8, 9, 10, 9, 8],
+    imageUrl: 'https://picsum.photos/seed/turkey/800/800',
+    shrinkRate: 1.8, markdownRate: 1.1, oosDays: 0, turnoverRate: 6.2, lastRestockDate: '2026-02-24',
+    forecastedDemand: [9, 10, 8, 9, 10, 11, 9]
+  },
+  {
+    id: '28', name: 'Whole Grain Cereal (18oz)', currentStock: 87, avgDailyDemand: 10, leadTime: 5, safetyStock: 18, reorderPoint: 68, status: 'excess', category: 'Pantry', price: 5.29, region: 'North', store: 'Main St. Market', department: 'Pantry',
+    historicalDemand: [11, 10, 9, 11, 12, 13, 10],
+    imageUrl: 'https://picsum.photos/seed/cereal/800/800',
+    shrinkRate: 0.2, markdownRate: 0.4, oosDays: 0, turnoverRate: 5.1, lastRestockDate: '2026-02-18',
+    forecastedDemand: [11, 12, 10, 11, 13, 12, 11]
+  },
+  {
+    id: '29', name: 'Frozen Chicken Nuggets (32oz)', currentStock: 12, avgDailyDemand: 8, leadTime: 4, safetyStock: 12, reorderPoint: 44, status: 'critical', category: 'Frozen', price: 7.49, region: 'South', store: 'Uptown Grocers', department: 'Frozen',
+    historicalDemand: [9, 8, 7, 9, 10, 11, 9],
+    imageUrl: 'https://picsum.photos/seed/nuggets/800/800',
+    shrinkRate: 0.4, markdownRate: 0.2, oosDays: 3, turnoverRate: 6.9, lastRestockDate: '2026-02-19',
+    forecastedDemand: [9, 10, 9, 8, 11, 12, 10]
+  },
+  {
+    id: '30', name: 'Sparkling Apple Cider (25oz)', currentStock: 39, avgDailyDemand: 6, leadTime: 5, safetyStock: 10, reorderPoint: 40, status: 'optimal', category: 'Beverages', price: 4.99, region: 'East', store: 'Harbor Fresh', department: 'Beverages',
+    historicalDemand: [7, 6, 5, 7, 8, 7, 6],
+    imageUrl: 'https://picsum.photos/seed/cider/800/800',
+    shrinkRate: 0.2, markdownRate: 0.2, oosDays: 0, turnoverRate: 4.1, lastRestockDate: '2026-02-20',
+    forecastedDemand: [7, 8, 6, 7, 8, 9, 7]
+  },
+  {
+    id: '31', name: 'Roma Tomatoes (2lb)', currentStock: 13, avgDailyDemand: 11, leadTime: 2, safetyStock: 10, reorderPoint: 32, status: 'low', category: 'Produce', price: 3.79, region: 'West', store: 'Green Valley Co-op', department: 'Produce',
+    historicalDemand: [12, 11, 10, 12, 14, 13, 11],
+    imageUrl: 'https://picsum.photos/seed/roma/800/800',
+    shrinkRate: 4.2, markdownRate: 2.4, oosDays: 1, turnoverRate: 12.8, lastRestockDate: '2026-02-26',
+    forecastedDemand: [12, 13, 11, 12, 14, 15, 13]
+  },
+  {
+    id: '32', name: 'Cod Fillet Frozen (2lb)', currentStock: 26, avgDailyDemand: 5, leadTime: 4, safetyStock: 10, reorderPoint: 30, status: 'optimal', category: 'Seafood', price: 12.99, region: 'Central', store: 'Metro Wholesale', department: 'Seafood',
+    historicalDemand: [6, 5, 4, 6, 7, 6, 5],
+    imageUrl: 'https://picsum.photos/seed/cod/800/800',
+    shrinkRate: 1.1, markdownRate: 0.7, oosDays: 0, turnoverRate: 4.8, lastRestockDate: '2026-02-22',
+    forecastedDemand: [6, 7, 5, 6, 7, 8, 6]
+  },
+  {
+    id: '33', name: 'Butter Croissants (6ct)', currentStock: 18, avgDailyDemand: 13, leadTime: 1, safetyStock: 8, reorderPoint: 21, status: 'low', category: 'Bakery', price: 5.99, region: 'East', store: 'Harbor Fresh', department: 'Bakery',
+    historicalDemand: [14, 13, 12, 14, 15, 16, 13],
+    imageUrl: 'https://picsum.photos/seed/croissant/800/800',
+    shrinkRate: 3.1, markdownRate: 2.2, oosDays: 1, turnoverRate: 17.3, lastRestockDate: '2026-02-28',
+    forecastedDemand: [14, 15, 13, 14, 16, 17, 15]
+  },
+  {
+    id: '34', name: 'Maple Syrup (12oz)', currentStock: 58, avgDailyDemand: 4, leadTime: 7, safetyStock: 10, reorderPoint: 38, status: 'excess', category: 'Pantry', price: 9.49, region: 'South', store: 'Uptown Grocers', department: 'Pantry',
+    historicalDemand: [5, 4, 4, 5, 6, 5, 4],
+    imageUrl: 'https://picsum.photos/seed/maple/800/800',
+    shrinkRate: 0.1, markdownRate: 0.0, oosDays: 0, turnoverRate: 2.9, lastRestockDate: '2026-02-12',
+    forecastedDemand: [5, 6, 4, 5, 6, 7, 5]
+  },
+  {
+    id: '35', name: 'Protein Bar Variety Pack (12ct)', currentStock: 21, avgDailyDemand: 7, leadTime: 6, safetyStock: 10, reorderPoint: 52, status: 'critical', category: 'Snacks', price: 15.99, region: 'Central', store: 'Metro Wholesale', department: 'Pantry',
+    historicalDemand: [8, 7, 6, 8, 9, 10, 7],
+    imageUrl: 'https://picsum.photos/seed/proteinbar/800/800',
+    shrinkRate: 0.1, markdownRate: 0.1, oosDays: 5, turnoverRate: 4.2, lastRestockDate: '2026-02-14',
+    forecastedDemand: [8, 9, 7, 8, 10, 11, 9]
+  },
 ];
 
 const MOCK_ROUTES = [
@@ -189,7 +259,7 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r2', origin: 'Miami Port, FL', destination: 'Atlanta DC', currentRate: 2.10, trend: 'stable', capacity: 'available', riskLevel: 'low',
+    id: 'r2', origin: 'Miami Port, FL', destination: 'Atlanta DC', currentRate: 2.10, trend: 'stable', capacity: 'loose', riskLevel: 'low',
     historicalRates: [
       { date: '2025-12-01', rate: 2.05 }, { date: '2025-12-08', rate: 2.00 }, { date: '2025-12-15', rate: 2.05 }, { date: '2025-12-22', rate: 2.10 },
       { date: '2026-01-05', rate: 2.08 }, { date: '2026-01-12', rate: 2.10 }, { date: '2026-01-19', rate: 2.05 }, { date: '2026-01-26', rate: 2.10 },
@@ -197,7 +267,7 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r3', origin: 'Pacific Northwest, WA', destination: 'Los Angeles Hub', currentRate: 1.85, trend: 'down', capacity: 'available', riskLevel: 'low',
+    id: 'r3', origin: 'Pacific Northwest, WA', destination: 'Los Angeles Hub', currentRate: 1.85, trend: 'down', capacity: 'loose', riskLevel: 'low',
     historicalRates: [
       { date: '2025-12-01', rate: 2.20 }, { date: '2025-12-08', rate: 2.15 }, { date: '2025-12-15', rate: 2.10 }, { date: '2025-12-22', rate: 2.05 },
       { date: '2026-01-05', rate: 2.00 }, { date: '2026-01-12', rate: 1.98 }, { date: '2026-01-19', rate: 1.95 }, { date: '2026-01-26', rate: 1.92 },
@@ -205,7 +275,7 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r4', origin: 'Texas Gulf Coast, TX', destination: 'Dallas DC', currentRate: 1.55, trend: 'stable', capacity: 'available', riskLevel: 'low',
+    id: 'r4', origin: 'Texas Gulf Coast, TX', destination: 'Dallas DC', currentRate: 1.55, trend: 'stable', capacity: 'loose', riskLevel: 'low',
     historicalRates: [
       { date: '2025-12-01', rate: 1.50 }, { date: '2025-12-08', rate: 1.52 }, { date: '2025-12-15', rate: 1.55 }, { date: '2025-12-22', rate: 1.58 },
       { date: '2026-01-05', rate: 1.55 }, { date: '2026-01-12', rate: 1.53 }, { date: '2026-01-19', rate: 1.56 }, { date: '2026-01-26', rate: 1.57 },
@@ -213,7 +283,7 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r5', origin: 'Central Valley, CA', destination: 'Phoenix Hub', currentRate: 2.75, trend: 'up', capacity: 'limited', riskLevel: 'medium',
+    id: 'r5', origin: 'Central Valley, CA', destination: 'Phoenix Hub', currentRate: 2.75, trend: 'up', capacity: 'moderate', riskLevel: 'medium',
     historicalRates: [
       { date: '2025-12-01', rate: 2.30 }, { date: '2025-12-08', rate: 2.35 }, { date: '2025-12-15', rate: 2.40 }, { date: '2025-12-22', rate: 2.50 },
       { date: '2026-01-05', rate: 2.45 }, { date: '2026-01-12', rate: 2.50 }, { date: '2026-01-19', rate: 2.55 }, { date: '2026-01-26', rate: 2.60 },
@@ -221,7 +291,7 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r6', origin: 'New York Port, NY', destination: 'Boston Hub', currentRate: 1.30, trend: 'stable', capacity: 'available', riskLevel: 'low',
+    id: 'r6', origin: 'New York Port, NY', destination: 'Boston Hub', currentRate: 1.30, trend: 'stable', capacity: 'loose', riskLevel: 'low',
     historicalRates: [
       { date: '2025-12-01', rate: 1.25 }, { date: '2025-12-08', rate: 1.28 }, { date: '2025-12-15', rate: 1.30 }, { date: '2025-12-22', rate: 1.32 },
       { date: '2026-01-05', rate: 1.30 }, { date: '2026-01-12', rate: 1.29 }, { date: '2026-01-19', rate: 1.31 }, { date: '2026-01-26', rate: 1.30 },
@@ -237,7 +307,7 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r8', origin: 'Southeast Port, SC', destination: 'Charlotte DC', currentRate: 1.95, trend: 'down', capacity: 'available', riskLevel: 'low',
+    id: 'r8', origin: 'Southeast Port, SC', destination: 'Charlotte DC', currentRate: 1.95, trend: 'down', capacity: 'loose', riskLevel: 'low',
     historicalRates: [
       { date: '2025-12-01', rate: 2.40 }, { date: '2025-12-08', rate: 2.35 }, { date: '2025-12-15', rate: 2.28 }, { date: '2025-12-22', rate: 2.20 },
       { date: '2026-01-05', rate: 2.15 }, { date: '2026-01-12', rate: 2.10 }, { date: '2026-01-19', rate: 2.08 }, { date: '2026-01-26', rate: 2.05 },
@@ -245,7 +315,7 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r9', origin: 'Midwest Farms, IA', destination: 'St. Louis Hub', currentRate: 2.60, trend: 'up', capacity: 'limited', riskLevel: 'medium',
+    id: 'r9', origin: 'Midwest Farms, IA', destination: 'St. Louis Hub', currentRate: 2.60, trend: 'up', capacity: 'moderate', riskLevel: 'medium',
     historicalRates: [
       { date: '2025-12-01', rate: 2.10 }, { date: '2025-12-08', rate: 2.15 }, { date: '2025-12-15', rate: 2.20 }, { date: '2025-12-22', rate: 2.30 },
       { date: '2026-01-05', rate: 2.25 }, { date: '2026-01-12', rate: 2.30 }, { date: '2026-01-19', rate: 2.35 }, { date: '2026-01-26', rate: 2.40 },
@@ -253,11 +323,59 @@ const MOCK_ROUTES = [
     ]
   },
   {
-    id: 'r10', origin: 'Gulf Coast, LA', destination: 'Nashville DC', currentRate: 2.30, trend: 'stable', capacity: 'available', riskLevel: 'medium',
+    id: 'r10', origin: 'Gulf Coast, LA', destination: 'Nashville DC', currentRate: 2.30, trend: 'stable', capacity: 'loose', riskLevel: 'medium',
     historicalRates: [
       { date: '2025-12-01', rate: 2.20 }, { date: '2025-12-08', rate: 2.25 }, { date: '2025-12-15', rate: 2.28 }, { date: '2025-12-22', rate: 2.30 },
       { date: '2026-01-05', rate: 2.28 }, { date: '2026-01-12', rate: 2.30 }, { date: '2026-01-19', rate: 2.32 }, { date: '2026-01-26', rate: 2.30 },
       { date: '2026-02-02', rate: 2.28 }, { date: '2026-02-09', rate: 2.30 }, { date: '2026-02-16', rate: 2.31 }, { date: '2026-02-23', rate: 2.30 }
+    ]
+  },
+  {
+    id: 'r11', origin: 'Denver Crossdock, CO', destination: 'Salt Lake Hub', currentRate: 2.05, trend: 'stable', capacity: 'moderate', riskLevel: 'low',
+    historicalRates: [
+      { date: '2025-12-01', rate: 1.95 }, { date: '2025-12-08', rate: 1.98 }, { date: '2025-12-15', rate: 2.00 }, { date: '2025-12-22', rate: 2.03 },
+      { date: '2026-01-05', rate: 2.00 }, { date: '2026-01-12', rate: 2.02 }, { date: '2026-01-19', rate: 2.04 }, { date: '2026-01-26', rate: 2.05 },
+      { date: '2026-02-02', rate: 2.03 }, { date: '2026-02-09', rate: 2.04 }, { date: '2026-02-16', rate: 2.05 }, { date: '2026-02-23', rate: 2.05 }
+    ]
+  },
+  {
+    id: 'r12', origin: 'Kansas City Rail, MO', destination: 'Memphis Hub', currentRate: 2.95, trend: 'up', capacity: 'tight', riskLevel: 'high',
+    historicalRates: [
+      { date: '2025-12-01', rate: 2.20 }, { date: '2025-12-08', rate: 2.30 }, { date: '2025-12-15', rate: 2.42 }, { date: '2025-12-22', rate: 2.55 },
+      { date: '2026-01-05', rate: 2.60 }, { date: '2026-01-12', rate: 2.68 }, { date: '2026-01-19', rate: 2.72 }, { date: '2026-01-26', rate: 2.80 },
+      { date: '2026-02-02', rate: 2.84 }, { date: '2026-02-09', rate: 2.89 }, { date: '2026-02-16', rate: 2.93 }, { date: '2026-02-23', rate: 2.95 }
+    ]
+  },
+  {
+    id: 'r13', origin: 'Portland Terminal, OR', destination: 'Boise DC', currentRate: 1.72, trend: 'down', capacity: 'loose', riskLevel: 'low',
+    historicalRates: [
+      { date: '2025-12-01', rate: 2.10 }, { date: '2025-12-08', rate: 2.04 }, { date: '2025-12-15', rate: 1.98 }, { date: '2025-12-22', rate: 1.92 },
+      { date: '2026-01-05', rate: 1.88 }, { date: '2026-01-12', rate: 1.85 }, { date: '2026-01-19', rate: 1.82 }, { date: '2026-01-26', rate: 1.79 },
+      { date: '2026-02-02', rate: 1.77 }, { date: '2026-02-09', rate: 1.75 }, { date: '2026-02-16', rate: 1.73 }, { date: '2026-02-23', rate: 1.72 }
+    ]
+  },
+  {
+    id: 'r14', origin: 'Savannah Port, GA', destination: 'Jacksonville Hub', currentRate: 1.65, trend: 'stable', capacity: 'loose', riskLevel: 'medium',
+    historicalRates: [
+      { date: '2025-12-01', rate: 1.60 }, { date: '2025-12-08', rate: 1.62 }, { date: '2025-12-15', rate: 1.63 }, { date: '2025-12-22', rate: 1.64 },
+      { date: '2026-01-05', rate: 1.63 }, { date: '2026-01-12', rate: 1.64 }, { date: '2026-01-19', rate: 1.66 }, { date: '2026-01-26', rate: 1.65 },
+      { date: '2026-02-02', rate: 1.64 }, { date: '2026-02-09', rate: 1.65 }, { date: '2026-02-16', rate: 1.66 }, { date: '2026-02-23', rate: 1.65 }
+    ]
+  },
+  {
+    id: 'r15', origin: 'Ontario, CA', destination: 'Las Vegas Hub', currentRate: 2.40, trend: 'up', capacity: 'moderate', riskLevel: 'medium',
+    historicalRates: [
+      { date: '2025-12-01', rate: 2.02 }, { date: '2025-12-08', rate: 2.08 }, { date: '2025-12-15', rate: 2.12 }, { date: '2025-12-22', rate: 2.18 },
+      { date: '2026-01-05', rate: 2.20 }, { date: '2026-01-12', rate: 2.24 }, { date: '2026-01-19', rate: 2.28 }, { date: '2026-01-26', rate: 2.32 },
+      { date: '2026-02-02', rate: 2.34 }, { date: '2026-02-09', rate: 2.36 }, { date: '2026-02-16', rate: 2.38 }, { date: '2026-02-23', rate: 2.40 }
+    ]
+  },
+  {
+    id: 'r16', origin: 'Cleveland Freight, OH', destination: 'Detroit Hub', currentRate: 1.48, trend: 'stable', capacity: 'moderate', riskLevel: 'low',
+    historicalRates: [
+      { date: '2025-12-01', rate: 1.44 }, { date: '2025-12-08', rate: 1.45 }, { date: '2025-12-15', rate: 1.46 }, { date: '2025-12-22', rate: 1.47 },
+      { date: '2026-01-05', rate: 1.46 }, { date: '2026-01-12', rate: 1.47 }, { date: '2026-01-19', rate: 1.48 }, { date: '2026-01-26', rate: 1.49 },
+      { date: '2026-02-02', rate: 1.48 }, { date: '2026-02-09', rate: 1.48 }, { date: '2026-02-16', rate: 1.49 }, { date: '2026-02-23', rate: 1.48 }
     ]
   },
 ];
@@ -287,6 +405,48 @@ async function seedDatabase() {
     await pool.query('DELETE FROM freight_routes');
     await pool.query('DELETE FROM products');
     await pool.query('DELETE FROM users');
+
+    // Enforce schema contracts on existing databases (init.sql only runs on fresh volumes)
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'products_status_check') THEN
+          ALTER TABLE products
+          ADD CONSTRAINT products_status_check CHECK (status IN ('optimal', 'low', 'excess', 'critical'));
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'freight_routes_trend_check') THEN
+          ALTER TABLE freight_routes
+          ADD CONSTRAINT freight_routes_trend_check CHECK (trend IN ('up', 'down', 'stable'));
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'freight_routes_capacity_check') THEN
+          ALTER TABLE freight_routes
+          ADD CONSTRAINT freight_routes_capacity_check CHECK (capacity IN ('loose', 'moderate', 'tight'));
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'freight_routes_risk_level_check') THEN
+          ALTER TABLE freight_routes
+          ADD CONSTRAINT freight_routes_risk_level_check CHECK (risk_level IN ('low', 'medium', 'high'));
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
+          ALTER TABLE users
+          ADD CONSTRAINT users_role_check CHECK (role IN ('sysadmin', 'admin', 'store_user', 'logistics_user'));
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_status_check') THEN
+          ALTER TABLE users
+          ADD CONSTRAINT users_status_check CHECK (status IN ('active', 'paused', 'deactivated'));
+        END IF;
+      END $$;
+    `);
+
+    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_product_demand_product_id_unique ON product_demand(product_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_freight_routes_destination ON freight_routes(destination)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_freight_routes_risk_level ON freight_routes(risk_level)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_freight_routes_capacity ON freight_routes(capacity)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_freight_routes_trend ON freight_routes(trend)');
 
     // Seed users
     for (const user of MOCK_USERS) {

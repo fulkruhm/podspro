@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 
 // User validation schemas
 export const createUserSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1).max(255),
   name: z.string().min(1).max(100),
   username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_-]+$/),
   role: z.enum(['sysadmin', 'admin', 'store_user', 'logistics_user']),
@@ -12,7 +12,7 @@ export const createUserSchema = z.object({
   password: z.string().min(8).max(255),
   assignedStore: z.string().max(100).optional(),
   assignedRegion: z.string().max(100).optional(),
-  status: z.enum(['active', 'inactive', 'suspended']).optional(),
+  status: z.enum(['active', 'paused', 'deactivated']).optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -24,15 +24,15 @@ export const updateUserSchema = z.object({
   password: z.string().min(8).max(255).optional(),
   assignedStore: z.string().max(100).optional(),
   assignedRegion: z.string().max(100).optional(),
-  status: z.enum(['active', 'inactive', 'suspended']).optional(),
+  status: z.enum(['active', 'paused', 'deactivated']).optional(),
 });
 
 // Product validation schemas
 export const updateProductSchema = z.object({
   current_stock: z.number().int().min(0).optional(),
   avg_daily_demand: z.number().positive().optional(),
-  status: z.enum(['in_stock', 'low_stock', 'out_of_stock']).optional(),
-  last_restock_date: z.string().datetime().optional(),
+  status: z.enum(['optimal', 'low', 'excess', 'critical']).optional(),
+  last_restock_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   historical_demand: z.array(z.number()).optional(),
   forecasted_demand: z.array(z.number()).optional(),
 });
@@ -40,16 +40,16 @@ export const updateProductSchema = z.object({
 // Chat validation schemas
 export const chatMessageSchema = z.object({
   sessionId: z.string().min(1),
-  message: z.string().min(1).max(5000),
+  message: z.string().min(1).max(20000),
 });
 
 export const chatCloseSchema = z.object({
   sessionId: z.string().min(1),
 });
 
-// UUID validation for path parameters
-export const uuidParamSchema = z.object({
-  id: z.string().uuid('Invalid ID format'),
+// Generic ID validation for path parameters
+export const entityIdParamSchema = z.object({
+  id: z.string().min(1).max(255),
 });
 
 // Validation middleware factory

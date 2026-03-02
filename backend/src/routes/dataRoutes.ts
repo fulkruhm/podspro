@@ -5,7 +5,7 @@ import {
   validateRequestParams,
   validateRequestBody,
   updateProductSchema,
-  uuidParamSchema,
+  entityIdParamSchema,
 } from '../middleware/validation.js';
 import { apiLimiter, strictLimiter } from '../middleware/rateLimiter.js';
 
@@ -26,7 +26,7 @@ dataRouter.get('/products', apiLimiter, async (req: Request, res: Response) => {
 dataRouter.get(
   '/products/:id',
   apiLimiter,
-  validateRequestParams(uuidParamSchema),
+  validateRequestParams(entityIdParamSchema),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -46,7 +46,7 @@ dataRouter.get(
 dataRouter.put(
   '/products/:id',
   strictLimiter,
-  validateRequestParams(uuidParamSchema),
+  validateRequestParams(entityIdParamSchema),
   validateRequestBody(updateProductSchema),
   async (req: Request, res: Response) => {
     try {
@@ -75,7 +75,7 @@ dataRouter.get('/routes', apiLimiter, async (req: Request, res: Response) => {
 dataRouter.get(
   '/routes/:id',
   apiLimiter,
-  validateRequestParams(uuidParamSchema),
+  validateRequestParams(entityIdParamSchema),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;

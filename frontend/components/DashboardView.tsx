@@ -7,6 +7,7 @@ interface DashboardViewProps {
   triggerQuery: (query: string) => void;
   products: Product[];
   routes: FreightRoute[];
+  isLoadingData: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
   lastUpdated: number;
@@ -17,6 +18,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   triggerQuery, 
   products, 
   routes, 
+  isLoadingData,
   isRefreshing, 
   onRefresh, 
   lastUpdated,
@@ -163,6 +165,44 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     }
   ];
 
+  const getRoleStatCards = () => {
+    if (userRole === 'sysadmin') {
+      return [
+        { label: 'System Uptime', value: '99.98%', change: '+0.01%', icon: '🖥️' },
+        { label: 'Security Events', value: '3 Open', change: '-2', icon: '🛡️', color: 'text-amber-600' },
+        { label: 'API Throughput', value: '1.2k/min', change: '+4.3%', icon: '📡' },
+        { label: 'Total Assets', value: `$${(inventoryValue / 1000).toFixed(1)}k`, change: '-1.4%', icon: '💰' },
+      ];
+    }
+
+    if (userRole === 'admin') {
+      return [
+        { label: 'Avg Service Level', value: '98.4%', change: '+0.2%', icon: '📈' },
+        { label: 'Total Assets', value: `$${(inventoryValue / 1000).toFixed(1)}k`, change: '-1.4%', icon: '💰' },
+        { label: 'Network Risk Index', value: 'Elevated', change: 'High', icon: '🛡️', color: 'text-amber-600' },
+        { label: 'Carrier Capacity', value: '72%', change: '-5%', icon: '🚛' },
+      ];
+    }
+
+    if (userRole === 'logistics_user') {
+      return [
+        { label: 'Network Risk Index', value: 'Elevated', change: 'High', icon: '🛡️', color: 'text-amber-600' },
+        { label: 'Carrier Capacity', value: '72%', change: '-5%', icon: '🚛' },
+        { label: 'On-Time Delivery', value: '94.2%', change: '+1.1%', icon: '⏱️' },
+        { label: 'Avg Freight Rate', value: '$2.84/mi', change: '+0.6%', icon: '🧭' },
+      ];
+    }
+
+    return [
+      { label: 'Avg Service Level', value: '98.4%', change: '+0.2%', icon: '📈' },
+      { label: 'Total Assets', value: `$${(inventoryValue / 1000).toFixed(1)}k`, change: '-1.4%', icon: '💰' },
+      { label: 'Stockout Risk', value: `${statusCounts.critical || 0} SKU`, change: `${statusCounts.critical ? '+' : ''}${statusCounts.critical || 0}`, icon: '⚠️', color: 'text-red-600' },
+      { label: 'Optimal Items', value: `${statusCounts.optimal || 0}`, change: '+2', icon: '✅' },
+    ];
+  };
+
+  const statCards = getRoleStatCards();
+
   return (
     <div className="space-y-4 md:space-y-6">
       <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -186,23 +226,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-        {[
-          { label: 'Avg Service Level', value: '98.4%', change: '+0.2%', icon: '📈', roles: ['admin', 'sysadmin', 'store_user'] },
-          { label: 'Total Assets', value: `$${(inventoryValue / 1000).toFixed(1)}k`, change: '-1.4%', icon: '💰', roles: ['admin', 'sysadmin', 'store_user'] },
-          { label: 'Network Risk Index', value: 'Elevated', change: 'High', icon: '🛡️', roles: ['admin', 'sysadmin', 'logistics_user'], color: 'text-amber-600' },
-          { label: 'Carrier Capacity', value: '72%', change: '-5%', icon: '🚛', roles: ['admin', 'sysadmin', 'logistics_user'] },
-        ].filter(s => s.roles.includes(userRole)).map((stat, i) => (
-          <div key={i} className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm transition hover:shadow-xl group relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <span className="text-2xl group-hover:scale-125 transition-transform duration-300">{stat.icon}</span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                stat.change.startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-              }`}>{stat.change}</span>
-            </div>
-            <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{stat.label}</div>
-            <div className={`text-xl md:text-2xl font-black mt-1 ${stat.color || 'text-slate-900'}`}>{stat.value}</div>
-          </div>
-        ))}
+        {isLoadingData
+          ? statCards.map((_, i) => (
+              <div key={`stat-skeleton-${i}`} className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm animate-pulse">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="h-6 w-6 rounded bg-slate-200"></div>
+                  <div className="h-4 w-12 rounded-full bg-slate-200"></div>
+                </div>
+                <div className="h-3 w-24 rounded bg-slate-200 mb-2"></div>
+                <div className="h-7 w-16 rounded bg-slate-200"></div>
+              </div>
+            ))
+          : statCards.map((stat, i) => (
+              <div key={i} className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm transition hover:shadow-xl group relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <span className="text-2xl group-hover:scale-125 transition-transform duration-300">{stat.icon}</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    stat.change.startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  }`}>{stat.change}</span>
+                </div>
+                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{stat.label}</div>
+                <div className={`text-xl md:text-2xl font-black mt-1 ${stat.color || 'text-slate-900'}`}>{stat.value}</div>
+              </div>
+            ))}
       </div>
 
       {/* Supply Chain Health Widget */}
@@ -221,73 +267,104 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {healthMetrics.map((metric, i) => (
-            <div key={i} className="flex flex-col bg-slate-50/50 p-6 rounded-[1.5rem] border border-slate-100 transition-all hover:shadow-md">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{metric.name}</div>
-                  <div className="text-2xl font-black text-slate-900">{metric.value}%</div>
+          {isLoadingData
+            ? [0, 1, 2].map((i) => (
+                <div key={`health-skeleton-${i}`} className="flex flex-col bg-slate-50/50 p-6 rounded-[1.5rem] border border-slate-100 animate-pulse">
+                  <div className="h-3 w-28 rounded bg-slate-200 mb-3"></div>
+                  <div className="h-8 w-16 rounded bg-slate-200 mb-4"></div>
+                  <div className="h-24 w-full rounded-xl bg-slate-200"></div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="h-2.5 w-32 rounded bg-slate-200"></div>
+                    <div className="h-4 w-14 rounded bg-slate-200"></div>
+                  </div>
                 </div>
-                <div className="w-20 h-10">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={metric.trend.map((v, idx) => ({ v, idx }))}>
-                      <Line 
-                        type="monotone" 
-                        dataKey="v" 
-                        stroke={metric.color} 
-                        strokeWidth={2} 
-                        dot={false} 
-                        isAnimationActive={true}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+              ))
+            : healthMetrics.map((metric, i) => (
+                <div key={i} className="flex flex-col bg-slate-50/50 p-6 rounded-[1.5rem] border border-slate-100 transition-all hover:shadow-md">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{metric.name}</div>
+                      <div className="text-2xl font-black text-slate-900">{metric.value}%</div>
+                    </div>
+                    <div className="w-20 h-10">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={metric.trend.map((v, idx) => ({ v, idx }))}>
+                          <Line 
+                            type="monotone" 
+                            dataKey="v" 
+                            stroke={metric.color} 
+                            strokeWidth={2} 
+                            dot={false} 
+                            isAnimationActive={true}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  
+                  {/* Gauge Visualization */}
+                  <div className="h-24 w-full relative flex items-center justify-center mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { value: metric.value },
+                            { value: 100 - metric.value }
+                          ]}
+                          cx="50%"
+                          cy="100%"
+                          startAngle={180}
+                          endAngle={0}
+                          innerRadius={45}
+                          outerRadius={60}
+                          paddingAngle={0}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          <Cell fill={metric.color} />
+                          <Cell fill="#e2e8f0" />
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute bottom-0 text-center w-full">
+                      <div className="h-px w-12 bg-slate-200 mx-auto mb-1"></div>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Performance</span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 flex items-center justify-between">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{metric.description}</p>
+                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
+                      metric.value > 80 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {metric.value > 80 ? 'OPTIMAL' : 'MONITOR'}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              
-              {/* Gauge Visualization */}
-              <div className="h-24 w-full relative flex items-center justify-center mt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { value: metric.value },
-                        { value: 100 - metric.value }
-                      ]}
-                      cx="50%"
-                      cy="100%"
-                      startAngle={180}
-                      endAngle={0}
-                      innerRadius={45}
-                      outerRadius={60}
-                      paddingAngle={0}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      <Cell fill={metric.color} />
-                      <Cell fill="#e2e8f0" />
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute bottom-0 text-center w-full">
-                  <div className="h-px w-12 bg-slate-200 mx-auto mb-1"></div>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Performance</span>
-                </div>
-              </div>
-              
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{metric.description}</p>
-                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
-                  metric.value > 80 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {metric.value > 80 ? 'OPTIMAL' : 'MONITOR'}
-                </span>
-              </div>
-            </div>
-          ))}
+              ))}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {isLoadingData ? (
+          <>
+            {userRole !== 'logistics_user' && (
+              <div className="lg:col-span-1 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm h-[400px] animate-pulse">
+                <div className="h-4 w-40 rounded bg-slate-200 mb-4"></div>
+                <div className="h-[280px] w-full rounded-2xl bg-slate-200"></div>
+              </div>
+            )}
+            <div className={`${userRole === 'logistics_user' ? 'lg:col-span-3' : 'lg:col-span-2'} bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm animate-pulse`}>
+              <div className="h-4 w-52 rounded bg-slate-200 mb-6"></div>
+              <div className="space-y-4">
+                {[0, 1, 2].map((i) => (
+                  <div key={`alert-skeleton-${i}`} className="h-20 rounded-[1.25rem] bg-slate-100 border border-slate-200"></div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
         {userRole !== 'logistics_user' && (
           <div className="lg:col-span-1 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col h-[400px]">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4">Inventory Segmentation</h3>
@@ -370,6 +447,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -36,8 +36,8 @@ app.use(cors({
 }));
 
 // Body parser with size limits
-app.use(express.json({ limit: '10kb' })); // Limit request body size
-app.use(express.urlencoded({ limit: '10kb', extended: true }));
+app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ limit: '256kb', extended: true }));
 
 // Input sanitization
 app.use(sanitizeInput);

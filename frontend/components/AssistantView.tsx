@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { sendMessage, startChat } from '../services/geminiService';
+import { sendMessage, sendMessageStream, startChat } from '../services/geminiService';
 import { ChatMessage } from '../types';
 
 interface AssistantViewProps {
@@ -25,13 +25,28 @@ const AssistantView: React.FC<AssistantViewProps> = ({ initialQuery, clearInitia
     if (!textToSend.trim() || !chatSessionRef.current || isLoading) return;
 
     const userMessage: ChatMessage = { role: 'user', content: textToSend, timestamp: Date.now() };
+    const aiMessageTimestamp = Date.now() + Math.random();
     setMessages(prev => [...prev, userMessage]);
+    setMessages(prev => [...prev, { role: 'model', content: '', timestamp: aiMessageTimestamp }]);
     if (!customMessage) setInput('');
     setIsLoading(true);
 
-    const response = await sendMessage(chatSessionRef.current, textToSend);
-    const aiMessage: ChatMessage = { role: 'model', content: response, timestamp: Date.now() };
-    setMessages(prev => [...prev, aiMessage]);
+    try {
+      await sendMessageStream(chatSessionRef.current, textToSend, (chunk) => {
+        setMessages(prev => prev.map(m => (
+          m.timestamp === aiMessageTimestamp && m.role === 'model'
+            ? { ...m, content: `${m.content}${chunk}` }
+            : m
+        )));
+      });
+    } catch (error) {
+      const fallback = await sendMessage(chatSessionRef.current, textToSend);
+      setMessages(prev => prev.map(m => (
+        m.timestamp === aiMessageTimestamp && m.role === 'model'
+          ? { ...m, content: fallback }
+          : m
+      )));
+    }
     
     setIsLoading(false);
   };

@@ -2,6 +2,17 @@
 import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
 import { getProducts, getRoutes } from '../db.js';
 
+export type ModelTier = 'fast' | 'pro';
+type DemoChat = {
+  _isDemoMode: true;
+  sendMessage: (msg: string) => Promise<{ text: string }>;
+};
+export type ChatLike = Chat | DemoChat;
+
+const FAST_MODEL = process.env.GEMINI_FAST_MODEL || 'gemini-3.1-pro-preview';
+const PRO_MODEL = process.env.GEMINI_PRO_MODEL || 'gemini-3.1-pro-preview';
+const COMPLEX_QUERY_PATTERN = /(optimi|forecast|multi|portfolio|scenario|root cause|sensitivity|what-if|simulation|constraints|allocation|network)/i;
+
 const SYSTEM_PROMPT = `
 # PODS (Predictive Order & Demand Solutions) AI Assistant
 ## System Identity & Core Mission
@@ -31,7 +42,35 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-export const startChat = (history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []): Chat | any => {
+export const selectModelTier = (message: string): ModelTier => {
+  return COMPLEX_QUERY_PATTERN.test(message) ? 'pro' : 'fast';
+};
+
+const isDemoChat = (chat: ChatLike): chat is DemoChat => {
+  return '_isDemoMode' in chat && chat._isDemoMode === true;
+};
+
+const extractText = (result: unknown): string => {
+  if (typeof result === 'string') return result;
+  if (result && typeof result === 'object' && 'text' in result) {
+    const text = (result as { text?: unknown }).text;
+    return typeof text === 'string' ? text : '';
+  }
+  return '';
+};
+
+const invokeSendMessage = async (chat: Chat, message: string): Promise<unknown> => {
+  try {
+    return await (chat as any).sendMessage(message);
+  } catch (firstError) {
+    return await (chat as any).sendMessage({ message });
+  }
+};
+
+export const startChat = (
+  modelTier: ModelTier = 'fast',
+  history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []
+): ChatLike => {
   const ai = getAI();
   if (!ai) {
     // Return a mock chat object for demo mode
@@ -43,32 +82,85 @@ export const startChat = (history: { role: 'user' | 'model'; parts: { text: stri
           text: "Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.",
         };
       },
-    } as any;
+    };
   }
-  return ai.chats.create({
-    model: 'gemini-3.1-pro-preview',
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      temperature: 0.7,
-    },
-  });
+
+  const preferredModel = modelTier === 'pro' ? PRO_MODEL : FAST_MODEL;
+  const fallbackModel = modelTier === 'pro' ? FAST_MODEL : PRO_MODEL;
+
+  for (const model of [preferredModel, fallbackModel]) {
+    try {
+      return ai.chats.create({
+        model,
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          temperature: 0.7,
+        },
+      });
+    } catch (error) {
+      console.warn(`[geminiService] Failed to initialize model ${model}, trying fallback`, error);
+    }
+  }
+
+  throw new Error('Unable to initialize Gemini chat model');
 };
 
-export const sendMessage = async (chat: Chat | any, message: string): Promise<string> => {
+export const sendMessage = async (chat: ChatLike, message: string): Promise<string> => {
   try {
     // Handle demo mode
-    if (chat._isDemoMode) {
+    if (isDemoChat(chat)) {
       return "Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.";
     }
-    
-    const result: GenerateContentResponse = await chat.sendMessage({ message });
-    return result.text || "No response from AI.";
+
+    const result = await invokeSendMessage(chat, message);
+    return extractText(result) || "No response from AI.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    if (error instanceof Error && error.message.includes("Requested entity was not found")) {
+    if (error instanceof Error && /Requested entity was not found|model/i.test(error.message)) {
+        return "ERROR_MODEL_UNAVAILABLE";
+    }
+    if (error instanceof Error && /API key|permission|unauthorized|forbidden/i.test(error.message)) {
         return "ERROR_API_KEY_REQUIRED";
     }
     return "I'm sorry, I encountered an error processing your request.";
+  }
+};
+
+export const streamMessage = async (
+  chat: ChatLike,
+  message: string,
+  onChunk: (chunk: string) => void
+): Promise<void> => {
+  try {
+    if (isDemoChat(chat)) {
+      onChunk("Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.");
+      return;
+    }
+
+    const chatWithStreaming = chat as Chat & {
+      sendMessageStream?: (message: string) => Promise<AsyncIterable<unknown>>;
+    };
+
+    if (typeof chatWithStreaming.sendMessageStream === 'function') {
+      try {
+        const stream = await chatWithStreaming.sendMessageStream(message);
+        for await (const chunk of stream) {
+          const text = extractText(chunk);
+          if (text) onChunk(text);
+        }
+        return;
+      } catch (streamError) {
+        console.warn('[geminiService] Streaming call failed, falling back to non-stream response');
+      }
+    }
+
+    const fullResponse = await sendMessage(chat, message);
+    for (const part of fullResponse.split(/(\s+)/)) {
+      if (part) onChunk(part);
+    }
+  } catch (error) {
+    console.error('Gemini streaming error:', error);
+    onChunk("I'm sorry, I encountered an error processing your request.");
   }
 };
 
@@ -131,7 +223,7 @@ export const fetchRealtimeData = async () => {
   
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: PRO_MODEL,
       contents: "Generate a realistic supply chain scenario for a grocery retail chain. Create 15 products distributed across 3 regions (North, South, West), 5 different stores, and departments like Produce, Dairy, Bakery, Meat, Frozen, Beverages, and Pantry. Ensure no electronics or non-grocery items. Vary the stock levels to show a mix of optimal, low, excess, and critical statuses. IMPORTANT: For each product, provide 7 days of realistic historicalDemand, a relevant picsum.photos imageUrl, shrinkRate (0-10%), markdownRate (0-20%), oosDays (0-10), turnoverRate, and 7 days of forecastedDemand. For each route, provide 12 weeks of realistic historicalRates to enable trend visualization.",
       config: {
         responseMimeType: "application/json",

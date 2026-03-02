@@ -11,8 +11,92 @@ interface LogisticsViewProps {
 
 const LogisticsView: React.FC<LogisticsViewProps> = ({ triggerQuery, routes, onClose }) => {
   const [selectedRouteId, setSelectedRouteId] = React.useState<string>(routes[0]?.id || '');
+  const [filters, setFilters] = React.useState({
+    origin: '',
+    destination: '',
+    riskLevel: '',
+    capacity: '',
+    trend: ''
+  });
 
-  const selectedRoute = routes.find(r => r.id === selectedRouteId) || routes[0];
+  const origins = React.useMemo(() => {
+    const scopedRoutes = filters.destination
+      ? routes.filter(r => r.destination === filters.destination)
+      : routes;
+    return Array.from(new Set(scopedRoutes.map(r => r.origin))).sort();
+  }, [routes, filters.destination]);
+  const destinations = React.useMemo(() => {
+    const scopedRoutes = filters.origin
+      ? routes.filter(r => r.origin === filters.origin)
+      : routes;
+    return Array.from(new Set(scopedRoutes.map(r => r.destination))).sort();
+  }, [routes, filters.origin]);
+  const riskLevels = ['high', 'medium', 'low'];
+  const capacities = ['tight', 'moderate', 'loose'];
+  const trends = ['up', 'down', 'stable'];
+
+  const filteredRoutes = React.useMemo(() => {
+    return routes.filter(route => {
+      if (filters.origin && route.origin !== filters.origin) return false;
+      if (filters.destination && route.destination !== filters.destination) return false;
+      if (filters.riskLevel && route.riskLevel !== filters.riskLevel) return false;
+      if (filters.capacity && route.capacity !== filters.capacity) return false;
+      if (filters.trend && route.trend !== filters.trend) return false;
+      return true;
+    });
+  }, [routes, filters]);
+
+  React.useEffect(() => {
+    if (!filteredRoutes.length) {
+      setSelectedRouteId('');
+      return;
+    }
+
+    const stillSelected = filteredRoutes.some(r => r.id === selectedRouteId);
+    if (!stillSelected) {
+      setSelectedRouteId(filteredRoutes[0].id);
+    }
+  }, [filteredRoutes, selectedRouteId]);
+
+  const clearFilters = () => {
+    setFilters({
+      origin: '',
+      destination: '',
+      riskLevel: '',
+      capacity: '',
+      trend: ''
+    });
+  };
+
+  const handleOriginChange = (origin: string) => {
+    const allowedDestinations = new Set(
+      routes
+        .filter(r => !origin || r.origin === origin)
+        .map(r => r.destination)
+    );
+
+    setFilters(prev => ({
+      ...prev,
+      origin,
+      destination: prev.destination && !allowedDestinations.has(prev.destination) ? '' : prev.destination
+    }));
+  };
+
+  const handleDestinationChange = (destination: string) => {
+    const allowedOrigins = new Set(
+      routes
+        .filter(r => !destination || r.destination === destination)
+        .map(r => r.origin)
+    );
+
+    setFilters(prev => ({
+      ...prev,
+      destination,
+      origin: prev.origin && !allowedOrigins.has(prev.origin) ? '' : prev.origin
+    }));
+  };
+
+  const selectedRoute = filteredRoutes.find(r => r.id === selectedRouteId) || filteredRoutes[0];
 
   const trendData = selectedRoute?.historicalRates?.map(hr => ({
     name: new Date(hr.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -44,6 +128,66 @@ const LogisticsView: React.FC<LogisticsViewProps> = ({ triggerQuery, routes, onC
           </button>
         </div>
       </header>
+
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Logistics Filters</h3>
+          {(filters.origin || filters.destination || filters.riskLevel || filters.capacity || filters.trend) && (
+            <button
+              onClick={clearFilters}
+              className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <select
+            value={filters.origin}
+            onChange={(e) => handleOriginChange(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            <option value="">All Origins</option>
+            {origins.map(origin => <option key={origin} value={origin}>{origin}</option>)}
+          </select>
+
+          <select
+            value={filters.destination}
+            onChange={(e) => handleDestinationChange(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            <option value="">All Destinations</option>
+            {destinations.map(destination => <option key={destination} value={destination}>{destination}</option>)}
+          </select>
+
+          <select
+            value={filters.riskLevel}
+            onChange={(e) => setFilters(prev => ({ ...prev, riskLevel: e.target.value }))}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            <option value="">All Risk Levels</option>
+            {riskLevels.map(level => <option key={level} value={level}>{level.toUpperCase()}</option>)}
+          </select>
+
+          <select
+            value={filters.capacity}
+            onChange={(e) => setFilters(prev => ({ ...prev, capacity: e.target.value }))}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            <option value="">All Capacity Bands</option>
+            {capacities.map(capacity => <option key={capacity} value={capacity}>{capacity.toUpperCase()}</option>)}
+          </select>
+
+          <select
+            value={filters.trend}
+            onChange={(e) => setFilters(prev => ({ ...prev, trend: e.target.value }))}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            <option value="">All Trends</option>
+            {trends.map(trend => <option key={trend} value={trend}>{trend.toUpperCase()}</option>)}
+          </select>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -128,7 +272,7 @@ const LogisticsView: React.FC<LogisticsViewProps> = ({ triggerQuery, routes, onC
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {routes.map((route) => (
+        {filteredRoutes.map((route) => (
           <div 
             key={route.id} 
             onClick={() => setSelectedRouteId(route.id)}
@@ -170,6 +314,18 @@ const LogisticsView: React.FC<LogisticsViewProps> = ({ triggerQuery, routes, onC
           </div>
         ))}
       </div>
+
+      {filteredRoutes.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+          <p className="text-xs font-semibold text-amber-800">No freight lanes match current filters.</p>
+          <button
+            onClick={clearFilters}
+            className="text-[10px] font-black uppercase tracking-widest text-amber-800 hover:underline"
+          >
+            Relax Filters
+          </button>
+        </div>
+      )}
     </div>
   );
 };

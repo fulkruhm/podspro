@@ -1,6 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Product } from '../types';
+import { forecastDemand } from '../services/mlService';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
@@ -22,13 +23,33 @@ interface ProductDetailViewProps {
   onClose: () => void;
   triggerQuery: (query: string) => void;
   onUpdateProduct: (productId: string, updates: Partial<Product>) => void;
+  onPrevProduct?: () => void;
+  onNextProduct?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  currentPosition?: number;
+  totalCount?: number;
 }
 
-const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, triggerQuery, onUpdateProduct }) => {
+const ProductDetailView: React.FC<ProductDetailViewProps> = ({
+  product,
+  onClose,
+  triggerQuery,
+  onUpdateProduct,
+  onPrevProduct,
+  onNextProduct,
+  hasPrev,
+  hasNext,
+  currentPosition,
+  totalCount
+}) => {
   const [ropValue, setRopValue] = useState(product.reorderPoint);
   const [safetyStockValue, setSafetyStockValue] = useState(product.safetyStock);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [mlForecast, setMlForecast] = useState<number[] | null>(null);
+  const [isForecastLoading, setIsForecastLoading] = useState(false);
+  const [forecastSource, setForecastSource] = useState<'ml' | 'fallback'>('fallback');
 
   // Sync local state when product prop changes
   useEffect(() => {
@@ -50,11 +71,54 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
   const historyCount = 7;
   const forecastCount = 7;
 
-  const rawHistory = [...(product.historicalDemand || [])];
-  while (rawHistory.length < historyCount) rawHistory.unshift(product.avgDailyDemand);
-  const finalHistory = rawHistory.slice(-historyCount);
+  const finalHistory = useMemo(() => {
+    const rawHistory = [...(product.historicalDemand || [])];
+    while (rawHistory.length < historyCount) rawHistory.unshift(product.avgDailyDemand);
+    return rawHistory.slice(-historyCount);
+  }, [product.historicalDemand, product.avgDailyDemand]);
 
-  const rawForecast = [...(product.forecastedDemand || [])];
+  const historySignature = finalHistory.join(',');
+
+  useEffect(() => {
+    let isMounted = true;
+    let debounceTimer: ReturnType<typeof setTimeout>;
+
+    const loadMlForecast = async () => {
+      setIsForecastLoading(true);
+      try {
+        const result = await forecastDemand({
+          product_id: product.id,
+          store_id: product.store,
+          historical_demand: finalHistory,
+          forecast_days: forecastCount,
+        });
+
+        if (!isMounted) return;
+        const normalizedForecast = (result.forecast || [])
+          .slice(0, forecastCount)
+          .map((value) => Math.max(0, Math.round(value)));
+        setMlForecast(normalizedForecast);
+        setForecastSource('ml');
+      } catch (error) {
+        if (!isMounted) return;
+        setMlForecast(null);
+        setForecastSource('fallback');
+      } finally {
+        if (isMounted) setIsForecastLoading(false);
+      }
+    };
+
+    debounceTimer = setTimeout(() => {
+      loadMlForecast();
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(debounceTimer);
+    };
+  }, [product.id, product.store, forecastCount, historySignature]);
+
+  const rawForecast = mlForecast && mlForecast.length > 0 ? [...mlForecast] : [...(product.forecastedDemand || [])];
   while (rawForecast.length < forecastCount) rawForecast.push(product.avgDailyDemand);
   const finalForecast = rawForecast.slice(0, forecastCount);
 
@@ -114,6 +178,45 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
     handleAction("Safety Stock updated", { safetyStock: safetyStockValue });
   };
 
+  const forecastTotal7d = finalForecast.reduce((sum, value) => sum + value, 0);
+  const daysOfCover = product.avgDailyDemand > 0 ? product.currentStock / product.avgDailyDemand : 0;
+  const ropGap = product.currentStock - ropValue;
+  const riskScore = Math.max(0, Math.min(100, Math.round(
+    (product.status === 'critical' ? 40 : product.status === 'low' ? 25 : 10)
+    + (product.oosDays || 0) * 4
+    + (product.shrinkRate || 0) * 2
+    + (ropGap < 0 ? 20 : 0)
+  )));
+
+  const getPrimaryAction = () => {
+    if (product.status === 'critical' || product.status === 'low') {
+      return {
+        label: 'Generate Reorder',
+        className: 'bg-red-600 hover:bg-red-700 text-white',
+        onClick: () => {
+          const suggestedQty = Math.max(0, Math.ceil((forecastTotal7d + safetyStockValue) - product.currentStock));
+          triggerQuery(`Generate a replenishment order recommendation for ${product.name} at ${product.store}. Current stock is ${product.currentStock}, 7-day forecast is ${forecastTotal7d}, safety stock is ${safetyStockValue}. Suggested order quantity estimate is ${suggestedQty}.`);
+        }
+      };
+    }
+
+    if (product.status === 'excess') {
+      return {
+        label: 'Reduce Excess',
+        className: 'bg-amber-600 hover:bg-amber-700 text-white',
+        onClick: () => triggerQuery(`Recommend markdown and transfer actions to reduce excess inventory for ${product.name} at ${product.store}. Current stock ${product.currentStock}, 7-day forecast ${forecastTotal7d}.`)
+      };
+    }
+
+    return {
+      label: 'Monitor',
+      className: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+      onClick: () => triggerQuery(`Provide monitoring recommendations for ${product.name} at ${product.store} to maintain optimal stock levels over the next 7 days.`)
+    };
+  };
+
+  const primaryAction = getPrimaryAction();
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -134,6 +237,29 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
           </div>
         </div>
         <div className="flex space-x-2">
+          {typeof currentPosition === 'number' && typeof totalCount === 'number' && (
+            <div className="hidden md:flex items-center px-3 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs font-black uppercase tracking-widest">
+              SKU {currentPosition}/{totalCount}
+            </div>
+          )}
+          {onPrevProduct && (
+            <button
+              onClick={onPrevProduct}
+              disabled={!hasPrev}
+              className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-bold text-xs hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+          )}
+          {onNextProduct && (
+            <button
+              onClick={onNextProduct}
+              disabled={!hasNext}
+              className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-bold text-xs hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          )}
           <button 
             onClick={() => triggerQuery(`Analyze the performance and stock levels for ${product.name} at ${product.store}`)}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition shadow-sm text-sm flex items-center"
@@ -144,9 +270,38 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
         </div>
       </header>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Days of Cover</p>
+          <p className="text-xl font-black text-slate-900 mt-1">{daysOfCover.toFixed(1)}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ROP Gap</p>
+          <p className={`text-xl font-black mt-1 ${ropGap < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ropGap}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Risk Score</p>
+          <p className={`text-xl font-black mt-1 ${riskScore >= 70 ? 'text-red-600' : riskScore >= 40 ? 'text-amber-600' : 'text-emerald-600'}`}>{riskScore}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">7D Forecast</p>
+          <p className="text-xl font-black text-slate-900 mt-1">{forecastTotal7d}</p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Analyst Action Center */}
         <div className="lg:col-span-1 space-y-6">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Recommended Action</p>
+            <button
+              onClick={primaryAction.onClick}
+              className={`w-full py-3 rounded-xl font-bold text-sm transition shadow-sm ${primaryAction.className}`}
+            >
+              {primaryAction.label}
+            </button>
+          </div>
+
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between border-b pb-4">
               <h3 className="font-bold text-slate-900 flex items-center">
@@ -289,8 +444,13 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
                 </div>
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-emerald-500 rounded-full mr-2"></div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Forecast</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">{isForecastLoading ? 'Forecast (Updating...)' : 'Forecast (ML)'}</span>
                 </div>
+                {!isForecastLoading && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${forecastSource === 'ml' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {forecastSource === 'ml' ? 'ML' : 'Fallback'}
+                  </span>
+                )}
               </div>
             </div>
             <div className="h-64">
@@ -401,6 +561,19 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose,
           </div>
 
           {/* Metric Glossary */}
+          <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
+            <h3 className="font-bold text-slate-900 mb-3 flex items-center">
+              <AlertCircle className="h-5 w-5 mr-2 text-indigo-600" />
+              Why This Recommendation
+            </h3>
+            <div className="space-y-2 text-xs text-slate-600">
+              <p><span className="font-black text-slate-700">Formula:</span> ROP = (Avg Daily Demand × Lead Time) + Safety Stock</p>
+              <p><span className="font-black text-slate-700">Current ROP:</span> ({product.avgDailyDemand} × {product.leadTime}) + {safetyStockValue} = <span className="font-bold">{(product.avgDailyDemand * product.leadTime) + safetyStockValue}</span></p>
+              <p><span className="font-black text-slate-700">Current Stock vs ROP:</span> {product.currentStock} vs {(product.avgDailyDemand * product.leadTime) + safetyStockValue}</p>
+              <p><span className="font-black text-slate-700">Interpretation:</span> {ropGap < 0 ? 'Stock is below the reorder threshold; replenishment should be prioritized.' : 'Stock remains above reorder threshold; monitor demand shifts and lead-time variability.'}</p>
+            </div>
+          </div>
+
           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
             <h3 className="font-bold text-slate-900 mb-4 flex items-center">
               <AlertCircle className="h-5 w-5 mr-2 text-indigo-600" />

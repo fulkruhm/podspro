@@ -1,12 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
 import { getAllUsers, getUserById, getUserByUsername, createUser, updateUser, deleteUser } from '../db.js';
 import {
   validateRequestBody,
   validateRequestParams,
   createUserSchema,
   updateUserSchema,
-  uuidParamSchema,
+  entityIdParamSchema,
 } from '../middleware/validation.js';
 import { strictLimiter } from '../middleware/rateLimiter.js';
 
@@ -37,7 +36,7 @@ userRouter.get('/', async (req: Request, res: Response) => {
 // Get user by ID - no sensitive data
 userRouter.get(
   '/:id',
-  validateRequestParams(uuidParamSchema),
+  validateRequestParams(entityIdParamSchema),
   async (req: Request, res: Response) => {
     try {
       const user = await getUserById(req.params.id);
@@ -85,7 +84,7 @@ userRouter.post(
 userRouter.put(
   '/:id',
   strictLimiter,
-  validateRequestParams(z.object({ id: z.string().uuid() })),
+  validateRequestParams(entityIdParamSchema),
   validateRequestBody(updateUserSchema),
   async (req: Request, res: Response) => {
     try {
@@ -107,7 +106,7 @@ userRouter.put(
 userRouter.delete(
   '/:id',
   strictLimiter,
-  validateRequestParams(uuidParamSchema),
+  validateRequestParams(entityIdParamSchema),
   async (req: Request, res: Response) => {
     try {
       await deleteUser(req.params.id);

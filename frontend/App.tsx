@@ -252,6 +252,7 @@ const App: React.FC = () => {
             triggerQuery={triggerAssistantQuery} 
             products={filteredProducts} 
             routes={currentUser.role === 'store_user' ? [] : routes}
+            isLoadingData={isLoadingData}
             isRefreshing={isRefreshing}
             onRefresh={handleRefreshData}
             lastUpdated={lastUpdated}
@@ -262,6 +263,7 @@ const App: React.FC = () => {
           <InventoryView 
             triggerQuery={triggerAssistantQuery} 
             products={filteredProducts} 
+            isLoadingData={isLoadingData}
             onClose={goBackToDashboard} 
             onUpdateProduct={handleUpdateProduct}
           />

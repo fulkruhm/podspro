@@ -8,11 +8,12 @@ import ProductDetailView from './ProductDetailView';
 interface InventoryViewProps {
   triggerQuery: (query: string) => void;
   products: Product[];
+  isLoadingData: boolean;
   onClose: () => void;
   onUpdateProduct: (productId: string, updates: Partial<Product>) => void;
 }
 
-const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, onClose, onUpdateProduct }) => {
+const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, isLoadingData, onClose, onUpdateProduct }) => {
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<Product['status'] | 'all'>('all');
   const [anomalies, setAnomalies] = React.useState<InventoryAnomaly[]>([]);
@@ -163,13 +164,71 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, o
   };
 
   if (selectedProduct) {
+    const selectedIndex = filteredProducts.findIndex(p => p.id === selectedProduct.id);
+    const hasPrev = selectedIndex > 0;
+    const hasNext = selectedIndex !== -1 && selectedIndex < filteredProducts.length - 1;
+
     return (
       <ProductDetailView 
         product={selectedProduct} 
         onClose={() => setSelectedProduct(null)} 
         triggerQuery={triggerQuery}
         onUpdateProduct={onUpdateProduct}
+        onPrevProduct={hasPrev ? () => setSelectedProduct(filteredProducts[selectedIndex - 1]) : undefined}
+        onNextProduct={hasNext ? () => setSelectedProduct(filteredProducts[selectedIndex + 1]) : undefined}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
+        currentPosition={selectedIndex >= 0 ? selectedIndex + 1 : 0}
+        totalCount={filteredProducts.length}
       />
+    );
+  }
+
+  if (isLoadingData) {
+    return (
+      <div className="space-y-4 md:space-y-6 relative animate-pulse">
+        <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pr-10 sm:pr-0">
+          <div>
+            <div className="h-8 w-56 rounded bg-slate-200 mb-2"></div>
+            <div className="h-4 w-72 rounded bg-slate-200"></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="h-10 w-24 rounded-lg bg-slate-200"></div>
+            <div className="h-10 w-24 rounded-lg bg-slate-200"></div>
+            <div className="h-10 w-28 rounded-lg bg-slate-200"></div>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => (
+            <div key={`insight-skeleton-${i}`} className="h-20 rounded-xl border border-slate-200 bg-white"></div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="lg:col-span-2 bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="h-5 w-52 rounded bg-slate-200 mb-4"></div>
+            <div className="h-56 md:h-64 rounded-xl bg-slate-200"></div>
+          </div>
+
+          <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="h-5 w-40 rounded bg-slate-200 mb-4"></div>
+            <div className="grid grid-cols-2 sm:grid-cols-1 gap-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={`health-skeleton-${i}`} className="h-12 rounded-lg bg-slate-200"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden sm:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 md:p-6 space-y-3">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={`row-skeleton-${i}`} className="h-12 rounded-lg bg-slate-200"></div>
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
