@@ -20,18 +20,18 @@ flowchart TB
 
   %% ===== Edge / Web =====
   B --> NGINX[Nginx Reverse Proxy :80]
-  NGINX --> FE[React Frontend\n(Vite build served by Nginx)]
-  NGINX --> API[Node.js Express API :3001\n(/api/*)]
+  NGINX --> FE[React Frontend<br/>(Vite build served by Nginx)]
+  NGINX --> API[Node.js Express API :3001<br/>(/api/*)]
 
   %% ===== Backend internals =====
   subgraph BACKEND[Backend Service (TypeScript / Express)]
-    SEC[Security Middleware\nheaders + sanitize]
+    SEC[Security Middleware<br/>headers + sanitize]
     CORS[CORS + Body Parser]
-    RL[Rate Limiters\napiLimiter / mlLimiter / strictLimiter]
-    ROUTES[Routes\n/auth /chat /anomalies /data /users /ml]
-    CHAT[Gemini Service\nsession chat + SSE stream]
-    MLGW[ML Gateway\nproxy to Python service]
-    BATCH[Nightly Forecast Scheduler\n+ manual batch trigger]
+    RL[Rate Limiters<br/>apiLimiter / mlLimiter / strictLimiter]
+    ROUTES[Routes<br/>/auth /chat /anomalies /data /users /ml]
+    CHAT[Gemini Service<br/>session chat + SSE stream]
+    MLGW[ML Gateway<br/>proxy to Python service]
+    BATCH[Nightly Forecast Scheduler<br/>+ manual batch trigger]
     DBS[DB Access Layer]
   end
 
@@ -47,9 +47,9 @@ flowchart TB
 
   %% ===== ML service =====
   subgraph MLSVC[Python FastAPI ML Service :5000]
-    MLR[ML Routes\n/health /info /anomalies/detect /forecast /batch-analysis]
-    AD[Isolation Forest\nAnomaly Detection]
-    FC[Exponential Smoothing\nDemand Forecasting]
+    MLR[ML Routes<br/>/health /info /anomalies/detect /forecast /batch-analysis]
+    AD[Isolation Forest<br/>Anomaly Detection]
+    FC[Exponential Smoothing<br/>Demand Forecasting]
   end
 
   MLGW --> MLR
@@ -164,3 +164,106 @@ sequenceDiagram
 - GitHub, GitLab, and many Markdown viewers render Mermaid blocks directly.
 - In VS Code, install a Mermaid-capable Markdown preview extension for live rendering.
 - For presentation decks, export Mermaid diagrams to SVG/PNG using Mermaid CLI.
+
+## 6) C4 Level 1 — System Context
+
+```mermaid
+flowchart LR
+  %% External actors
+  SM[Store Manager]
+  LA[Logistics Analyst]
+  RA[Regional Admin]
+  SA[System Admin]
+
+  %% System of interest
+  PODS[PODS Platform<br/>AI-native Supply Chain Operations]
+
+  %% External systems
+  GEM[Google Gemini API<br/>LLM Inference]
+
+  SM -->|Monitors inventory and asks operational questions| PODS
+  LA -->|Tracks routes, delays, and logistics risks| PODS
+  RA -->|Reviews regional performance and governance| PODS
+  SA -->|Manages users, policies, and platform operations| PODS
+
+  PODS -->|Sends prompts and receives AI responses| GEM
+```
+
+## 7) C4 Level 2 — Container Diagram
+
+```mermaid
+flowchart TB
+  %% People
+  SM[Store Manager]
+  LA[Logistics Analyst]
+  RA[Regional Admin]
+  SA[System Admin]
+
+  %% Containers
+  WEB[Web App<br/>React + TypeScript<br/>Served by Nginx]
+  API[Backend API<br/>Node.js + Express + TypeScript]
+  ML[ML Service<br/>Python + FastAPI + scikit-learn]
+  DB[(PostgreSQL)]
+  GEM[Google Gemini API]
+
+  %% Relationships
+  SM --> WEB
+  LA --> WEB
+  RA --> WEB
+  SA --> WEB
+
+  WEB -->|HTTPS /api/*| API
+  API -->|SQL| DB
+  API -->|HTTP /api/ml/* proxy| ML
+  API -->|LLM prompt/response| GEM
+  ML -->|Read/write model inputs & forecasts| DB
+```
+
+## 8) C4 Level 3 — Component Diagram (Node Backend)
+
+```mermaid
+flowchart TB
+  %% External dependencies
+  FE[Frontend (React App)]
+  MLSVC[Python ML Service]
+  PG[(PostgreSQL)]
+  GEM[Google Gemini API]
+
+  %% Backend container
+  subgraph NODE[Node Backend (Express)]
+    MW[Cross-cutting Middleware<br/>security headers, sanitize, CORS, rate limits]
+    AUTH[Auth Routes<br/>login/session/identity]
+    USERS[User Routes<br/>RBAC + user management]
+    DATA[Data Routes<br/>products, logistics, analytics]
+    ANOM[Anomaly Routes<br/>operational anomaly APIs]
+    CHAT[Chat Routes<br/>message + stream + session lifecycle]
+    MLGW[ML Routes Gateway<br/>forecast/anomaly proxy + batch endpoints]
+    GEMSVC[Gemini Service<br/>model tiering + timeout handling]
+    SCHED[Forecast Scheduler<br/>nightly orchestration]
+    BATCH[Forecast Batch Service<br/>store-product batch execution]
+    DBL[DB Layer<br/>query + persistence functions]
+  end
+
+  FE --> MW
+  MW --> AUTH
+  MW --> USERS
+  MW --> DATA
+  MW --> ANOM
+  MW --> CHAT
+  MW --> MLGW
+
+  CHAT --> GEMSVC --> GEM
+
+  AUTH --> DBL
+  USERS --> DBL
+  DATA --> DBL
+  ANOM --> DBL
+  MLGW --> DBL
+
+  MLGW --> MLSVC
+  SCHED --> BATCH
+  BATCH --> MLSVC
+  BATCH --> DBL
+
+  DBL --> PG
+```
