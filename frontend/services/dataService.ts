@@ -23,6 +23,7 @@ export interface Product {
   turnoverRate?: number;
   lastRestockDate?: string;
   forecastedDemand?: number[];
+  forecastedExplainability?: string[];
 }
 
 export interface FreightRoute {
@@ -60,6 +61,7 @@ function mapProductFromDB(dbProduct: any): Product {
     turnoverRate: parseFloat(dbProduct.turnover_rate) || 0,
     lastRestockDate: dbProduct.last_restock_date,
     forecastedDemand: dbProduct.forecasted_demand,
+    forecastedExplainability: dbProduct.forecast_explainability,
   };
 }
 

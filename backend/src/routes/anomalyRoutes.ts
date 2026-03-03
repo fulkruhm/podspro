@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { detectInventoryAnomalies } from '../services/anomalyService.js';
-import { Product } from '../types.js';
 
 export const anomalyRouter = Router();
 

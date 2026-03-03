@@ -10,7 +10,9 @@
     "frontend:build": "npm run build -w frontend",
     "backend:dev": "npm run dev -w backend",
     "backend:build": "npm run build -w backend",
-    "lint": "npm run lint -w frontend && npm run lint -w backend"
+    "lint": "npm run lint -w frontend && npm run lint -w backend",
+    "test": "npm run test -w backend && npm run test -w frontend && npm run test:ml",
+    "test:ml": "docker compose run --rm ml-service pytest -q"
   },
   "workspaces": [
     "frontend",

@@ -392,6 +392,219 @@ const MOCK_USERS = [
   { id: 'l1', name: 'Logistics Analyst 1', username: 'log1', role: 'logistics_user', email: 'log1@pods-logistics.com', phoneNumber: '+1 (555) 0301', password: 'log1', status: 'active', failedLoginAttempts: 0, isLocked: false },
 ];
 
+type SeedProduct = (typeof MOCK_PRODUCTS)[number];
+type SeedRoute = (typeof MOCK_ROUTES)[number];
+
+function parseSeedInt(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
+const SEED_PRODUCT_MULTIPLIER = parseSeedInt(process.env.SEED_PRODUCT_MULTIPLIER, 2, 1, 8);
+const SEED_ROUTE_MULTIPLIER = parseSeedInt(process.env.SEED_ROUTE_MULTIPLIER, 2, 1, 8);
+const SEED_HISTORY_DAYS = parseSeedInt(process.env.SEED_HISTORY_DAYS, 84, 28, 365);
+const SEED_FORECAST_DAYS = parseSeedInt(process.env.SEED_FORECAST_DAYS, 14, 7, 60);
+
+const STORE_REGION_MAP: Array<{ store: string; region: string }> = [
+  { store: 'Main St. Market', region: 'North' },
+  { store: 'Uptown Grocers', region: 'South' },
+  { store: 'Harbor Fresh', region: 'East' },
+  { store: 'Green Valley Co-op', region: 'West' },
+  { store: 'River Bend Foods', region: 'Central' },
+  { store: 'Metro Wholesale', region: 'Central' },
+];
+
+function buildForecastSeries(baseWeekly: number[], fallbackWeekly: number[], totalDays = 14): number[] {
+  const source = baseWeekly.length > 0 ? baseWeekly : fallbackWeekly;
+  if (!source.length) return [];
+
+  const output: number[] = [];
+  const startOffset = totalDays % source.length;
+
+  for (let i = 0; i < totalDays; i++) {
+    const idx = (startOffset + i) % source.length;
+    const baseValue = source[idx] || 0;
+    const weekendLift = i % 7 === 5 || i % 7 === 6 ? 1.06 : 0.96;
+    const drift = 1 + (i / Math.max(1, totalDays - 1)) * 0.08;
+    const noise = ((i % 4) - 1.5) * 0.03;
+    output.push(Math.max(0, Math.round(baseValue * weekendLift * drift * (1 + noise))));
+  }
+
+  return output;
+}
+
+function buildSeedProducts(): SeedProduct[] {
+  if (SEED_PRODUCT_MULTIPLIER <= 1) {
+    return MOCK_PRODUCTS.map((product) => ({
+      ...product,
+      historicalDemand: [...product.historicalDemand],
+      forecastedDemand: buildForecastSeries(product.forecastedDemand || [], product.historicalDemand || [], SEED_FORECAST_DAYS),
+    }));
+  }
+
+  const expanded: SeedProduct[] = [];
+  let syntheticIdCounter = 1000;
+
+  for (let replica = 0; replica < SEED_PRODUCT_MULTIPLIER; replica++) {
+    for (const baseProduct of MOCK_PRODUCTS) {
+      if (replica === 0) {
+        expanded.push({
+          ...baseProduct,
+          historicalDemand: [...baseProduct.historicalDemand],
+          forecastedDemand: buildForecastSeries(baseProduct.forecastedDemand || [], baseProduct.historicalDemand || [], SEED_FORECAST_DAYS),
+        });
+        continue;
+      }
+
+      const location = STORE_REGION_MAP[(Number(baseProduct.id) + replica) % STORE_REGION_MAP.length];
+      const stockScale = 1 + ((replica % 3) - 1) * 0.18;
+      const demandScale = 1 + ((replica % 4) - 1.5) * 0.10;
+      const historicalDemand = (baseProduct.historicalDemand || []).map((value, idx) => {
+        const noise = ((idx + replica) % 3 - 1) * 0.05;
+        return Math.max(0, Math.round(value * demandScale * (1 + noise)));
+      });
+
+      const forecastedDemand = buildForecastSeries(baseProduct.forecastedDemand || [], historicalDemand, SEED_FORECAST_DAYS);
+
+      const derivedDemand = Math.max(1, Math.round(baseProduct.avgDailyDemand * demandScale));
+      const derivedStock = Math.max(0, Math.round(baseProduct.currentStock * stockScale));
+      const derivedReorderPoint = Math.max(derivedDemand + baseProduct.safetyStock, Math.round(baseProduct.reorderPoint * demandScale));
+
+      expanded.push({
+        ...baseProduct,
+        id: String(syntheticIdCounter++),
+        name: `${baseProduct.name} • Variant ${replica + 1}`,
+        currentStock: derivedStock,
+        avgDailyDemand: derivedDemand,
+        reorderPoint: derivedReorderPoint,
+        status: derivedStock <= Math.max(1, Math.floor(derivedReorderPoint * 0.35))
+          ? 'critical'
+          : derivedStock <= Math.max(1, Math.floor(derivedReorderPoint * 0.7))
+            ? 'low'
+            : derivedStock >= Math.max(1, Math.floor(derivedReorderPoint * 1.5))
+              ? 'excess'
+              : 'optimal',
+        region: location.region,
+        store: location.store,
+        imageUrl: `https://picsum.photos/seed/${encodeURIComponent(baseProduct.id)}-${replica}/800/800`,
+        historicalDemand,
+        forecastedDemand,
+      });
+    }
+  }
+
+  return expanded;
+}
+
+function buildSeedRoutes(): SeedRoute[] {
+  if (SEED_ROUTE_MULTIPLIER <= 1) {
+    return MOCK_ROUTES.map((route) => ({
+      ...route,
+      historicalRates: route.historicalRates.map((rate) => ({ ...rate })),
+    }));
+  }
+
+  const expanded: SeedRoute[] = [];
+
+  for (let replica = 0; replica < SEED_ROUTE_MULTIPLIER; replica++) {
+    for (const baseRoute of MOCK_ROUTES) {
+      if (replica === 0) {
+        expanded.push({
+          ...baseRoute,
+          historicalRates: baseRoute.historicalRates.map((rate) => ({ ...rate })),
+        });
+        continue;
+      }
+
+      const rateScale = 1 + ((replica % 5) - 2) * 0.06;
+      const historicalRates = baseRoute.historicalRates.map((rate, idx) => {
+        const noise = ((idx + replica) % 4 - 1.5) * 0.02;
+        const scaledRate = Number((rate.rate * rateScale * (1 + noise)).toFixed(2));
+        return {
+          date: rate.date,
+          rate: Math.max(0.8, scaledRate),
+        };
+      });
+
+      const currentRate = historicalRates[historicalRates.length - 1]?.rate ?? baseRoute.currentRate;
+
+      expanded.push({
+        ...baseRoute,
+        id: `${baseRoute.id}-v${replica + 1}`,
+        origin: `${baseRoute.origin} (L${replica + 1})`,
+        destination: `${baseRoute.destination} (L${replica + 1})`,
+        currentRate,
+        historicalRates,
+      });
+    }
+  }
+
+  return expanded;
+}
+
+function buildHistoricalSeries(baseWeekly: number[], totalDays = 56): number[] {
+  if (!baseWeekly.length) {
+    return [];
+  }
+
+  const series: number[] = [];
+  const startOffset = totalDays % baseWeekly.length;
+
+  for (let i = 0; i < totalDays; i++) {
+    const weeklyIdx = (startOffset + i) % baseWeekly.length;
+    const baseValue = baseWeekly[weeklyIdx] || 0;
+
+    const seasonality = i % 7 === 5 || i % 7 === 6 ? 1.08 : 0.97;
+    const drift = 1 + ((i - totalDays / 2) / totalDays) * 0.06;
+    const noise = ((i % 5) - 2) * 0.04;
+
+    const adjusted = Math.max(0, Math.round(baseValue * seasonality * drift * (1 + noise)));
+    series.push(adjusted);
+  }
+
+  return series;
+}
+
+function isFixedHoliday(date: Date): boolean {
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const key = `${month}-${day}`;
+  const fixedHolidays = new Set([
+    '1-1',
+    '7-4',
+    '11-26',
+    '12-24',
+    '12-25',
+    '12-31'
+  ]);
+  return fixedHolidays.has(key);
+}
+
+const SEEDED_PROMO_DAY_OFFSETS = new Set([1, 3, 5, 8, 10, 12]);
+const SEEDED_HOLIDAY_DAY_OFFSETS = new Set([7, 14]);
+
+function buildFeatureSignal(productId: string, dayOffset: number, date: Date) {
+  const weekday = date.getUTCDay(); // 0=Sun
+  const holidayFlag = isFixedHoliday(date)
+    || (dayOffset > 0 && SEEDED_HOLIDAY_DAY_OFFSETS.has(dayOffset));
+
+  const promoFlag = (dayOffset > 0 && SEEDED_PROMO_DAY_OFFSETS.has(dayOffset))
+    || holidayFlag
+    || (dayOffset <= 0 && weekday === 5);
+
+  const seasonalWave = Math.sin((dayOffset / 9) * Math.PI) * 0.08;
+  const weekendLift = (weekday === 5 || weekday === 6) ? 0.05 : -0.02;
+  const promoWeatherBoost = promoFlag ? 0.04 : 0;
+  const weatherIndex = Number((1 + seasonalWave + weekendLift + promoWeatherBoost).toFixed(3));
+
+  return {
+    promoFlag,
+    holidayFlag,
+    weatherIndex: Math.max(0.75, Math.min(1.35, weatherIndex)),
+  };
+}
+
 async function seedDatabase() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://pods_user:pods_password@localhost:5432/pods_db',
@@ -400,8 +613,72 @@ async function seedDatabase() {
   try {
     console.log('🌱 Seeding database...');
 
+    const seedProducts = buildSeedProducts();
+    const seedRoutes = buildSeedRoutes();
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS product_demand_history (
+        id SERIAL PRIMARY KEY,
+        product_id VARCHAR(255) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        store_id VARCHAR(255) NOT NULL,
+        demand_date DATE NOT NULL,
+        demand_qty INTEGER NOT NULL CHECK (demand_qty >= 0),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (product_id, store_id, demand_date)
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS product_demand_forecast (
+        id SERIAL PRIMARY KEY,
+        product_id VARCHAR(255) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        store_id VARCHAR(255) NOT NULL,
+        forecast_date DATE NOT NULL,
+        forecast_qty DECIMAL(10,2) NOT NULL CHECK (forecast_qty >= 0),
+        confidence_lower DECIMAL(10,2),
+        confidence_upper DECIMAL(10,2),
+        trend VARCHAR(50),
+        explainability_text TEXT,
+        model_name VARCHAR(100) DEFAULT 'exponential_smoothing',
+        generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS product_demand_features (
+        id SERIAL PRIMARY KEY,
+        product_id VARCHAR(255) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        store_id VARCHAR(255) NOT NULL,
+        feature_date DATE NOT NULL,
+        promo_flag BOOLEAN NOT NULL DEFAULT FALSE,
+        holiday_flag BOOLEAN NOT NULL DEFAULT FALSE,
+        weather_index DECIMAL(6,3) NOT NULL DEFAULT 1.000,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (product_id, store_id, feature_date)
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ml_batch_job_runs (
+        id SERIAL PRIMARY KEY,
+        job_type VARCHAR(100) NOT NULL,
+        status VARCHAR(30) NOT NULL CHECK (status IN ('running', 'success', 'failed', 'partial_success')),
+        triggered_by VARCHAR(255),
+        started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP,
+        total_items INTEGER,
+        succeeded_items INTEGER,
+        failed_items INTEGER,
+        error_summary TEXT,
+        details JSONB
+      )
+    `);
+
     await pool.query('DELETE FROM freight_route_rates');
-    await pool.query('DELETE FROM product_demand');
+    await pool.query('DELETE FROM ml_batch_job_runs');
+    await pool.query('DELETE FROM product_demand_forecast');
+    await pool.query('DELETE FROM product_demand_features');
+    await pool.query('DELETE FROM product_demand_history');
     await pool.query('DELETE FROM freight_routes');
     await pool.query('DELETE FROM products');
     await pool.query('DELETE FROM users');
@@ -442,7 +719,9 @@ async function seedDatabase() {
       END $$;
     `);
 
-    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_product_demand_product_id_unique ON product_demand(product_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_product_demand_history_product_store_date ON product_demand_history(product_id, store_id, demand_date)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_product_demand_forecast_product_store_generated ON product_demand_forecast(product_id, store_id, generated_at DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_product_demand_features_product_store_date ON product_demand_features(product_id, store_id, feature_date)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_freight_routes_destination ON freight_routes(destination)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_freight_routes_risk_level ON freight_routes(risk_level)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_freight_routes_capacity ON freight_routes(capacity)');
@@ -464,7 +743,7 @@ async function seedDatabase() {
     console.log(`✓ Seeded ${MOCK_USERS.length} users`);
 
     // Seed products
-    for (const product of MOCK_PRODUCTS) {
+    for (const product of seedProducts) {
       await pool.query(`
         INSERT INTO products (
           id, name, current_stock, avg_daily_demand, lead_time, safety_stock,
@@ -479,19 +758,101 @@ async function seedDatabase() {
         product.turnoverRate, product.lastRestockDate
       ]);
 
-      await pool.query(`
-        INSERT INTO product_demand (product_id, historical_demand, forecasted_demand)
-        VALUES ($1, $2, $3)
-      `, [
-        product.id,
-        product.historicalDemand || [],
-        product.forecastedDemand || []
-      ]);
+      const historicalSeries = buildHistoricalSeries(product.historicalDemand || [], SEED_HISTORY_DAYS);
+
+      for (let idx = 0; idx < historicalSeries.length; idx++) {
+        const demandQty = historicalSeries[idx];
+        const daysAgo = historicalSeries.length - idx - 1;
+
+        await pool.query(`
+          INSERT INTO product_demand_history (product_id, store_id, demand_date, demand_qty)
+          VALUES (
+            $1,
+            $2,
+            CURRENT_DATE - ($3 * INTERVAL '1 day'),
+            $4
+          )
+        `, [product.id, product.store, daysAgo, demandQty]);
+      }
+
+      for (let dayOffset = -(SEED_HISTORY_DAYS - 1); dayOffset <= Math.max(30, SEED_FORECAST_DAYS + 14); dayOffset++) {
+        const featureDate = new Date();
+        featureDate.setUTCDate(featureDate.getUTCDate() + dayOffset);
+        const featureSignal = buildFeatureSignal(product.id, dayOffset, featureDate);
+
+        await pool.query(`
+          INSERT INTO product_demand_features (
+            product_id,
+            store_id,
+            feature_date,
+            promo_flag,
+            holiday_flag,
+            weather_index
+          )
+          VALUES (
+            $1,
+            $2,
+            CURRENT_DATE + ($3 * INTERVAL '1 day'),
+            $4,
+            $5,
+            $6
+          )
+          ON CONFLICT (product_id, store_id, feature_date)
+          DO UPDATE SET
+            promo_flag = EXCLUDED.promo_flag,
+            holiday_flag = EXCLUDED.holiday_flag,
+            weather_index = EXCLUDED.weather_index
+        `, [
+          product.id,
+          product.store,
+          dayOffset,
+          featureSignal.promoFlag,
+          featureSignal.holidayFlag,
+          featureSignal.weatherIndex,
+        ]);
+      }
+
+      const generatedAt = new Date().toISOString();
+      const forecastSeries = buildForecastSeries(product.forecastedDemand || [], historicalSeries, SEED_FORECAST_DAYS);
+      for (let idx = 0; idx < forecastSeries.length; idx++) {
+        const forecastQty = forecastSeries[idx];
+
+        await pool.query(`
+          INSERT INTO product_demand_forecast (
+            product_id,
+            store_id,
+            forecast_date,
+            forecast_qty,
+            explainability_text,
+            generated_at,
+            model_name
+          )
+          VALUES (
+            $1,
+            $2,
+            CURRENT_DATE + (($3 + 1) * INTERVAL '1 day'),
+            $4,
+            $5,
+            $6,
+            'seed_baseline'
+          )
+        `, [
+          product.id,
+          product.store,
+          idx,
+          forecastQty,
+          `Seed baseline forecast for D+${idx + 1}.`,
+          generatedAt,
+        ]);
+      }
     }
-    console.log(`✓ Seeded ${MOCK_PRODUCTS.length} products`);
+    console.log(`✓ Seeded ${seedProducts.length} products`);
+    console.log(
+      `✓ Seeded feature schedule (next 14 days): promo D+${Array.from(SEEDED_PROMO_DAY_OFFSETS).join(', D+')}; holidays D+${Array.from(SEEDED_HOLIDAY_DAY_OFFSETS).join(', D+')}`
+    );
 
     // Seed routes
-    for (const route of MOCK_ROUTES) {
+    for (const route of seedRoutes) {
       await pool.query(`
         INSERT INTO freight_routes (id, origin, destination, current_rate, trend, capacity, risk_level)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -507,7 +868,8 @@ async function seedDatabase() {
         `, [route.id, rate.date, rate.rate]);
       }
     }
-    console.log(`✓ Seeded ${MOCK_ROUTES.length} routes`);
+    console.log(`✓ Seeded ${seedRoutes.length} routes`);
+    console.log(`✓ Seed config: products x${SEED_PRODUCT_MULTIPLIER}, routes x${SEED_ROUTE_MULTIPLIER}, history ${SEED_HISTORY_DAYS}d, forecast ${SEED_FORECAST_DAYS}d`);
 
     console.log('✅ Database seeded successfully!');
     process.exit(0);

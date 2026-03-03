@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
+import { GoogleGenAI, Chat, Type } from "@google/genai";
 import { getProducts, getRoutes } from '../db.js';
 
 export type ModelTier = 'fast' | 'pro';
@@ -69,7 +69,7 @@ const invokeSendMessage = async (chat: Chat, message: string): Promise<unknown> 
 
 export const startChat = (
   modelTier: ModelTier = 'fast',
-  history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []
+  _history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []
 ): ChatLike => {
   const ai = getAI();
   if (!ai) {
@@ -77,7 +77,7 @@ export const startChat = (
     console.log('[geminiService] Starting chat in demo mode (no API key)');
     return {
       _isDemoMode: true,
-      sendMessage: async (msg: string) => {
+      sendMessage: async (_msg: string) => {
         return {
           text: "Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.",
         };

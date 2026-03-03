@@ -7,6 +7,7 @@ import { dataRouter } from './routes/dataRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
 import { authRouter } from './routes/authRoutes.js';
 import { mlRouter } from './routes/mlRoutes.js';
+import { startNightlyForecastScheduler } from './services/forecastBatchScheduler.js';
 import { securityHeaders, sanitizeInput } from './middleware/security.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 
@@ -46,7 +47,7 @@ app.use(sanitizeInput);
 app.use(apiLimiter);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -59,7 +60,7 @@ app.use('/api/users', userRouter);
 app.use('/api/ml', mlRouter);
 
 // Error handling middleware - never expose internal errors to client
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err);
 
   // Don't expose internal error details to client
@@ -74,4 +75,5 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  startNightlyForecastScheduler();
 });

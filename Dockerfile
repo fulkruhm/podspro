@@ -1,16 +1,23 @@
+# syntax=docker/dockerfile:1.7
+
 # Build stage for backend
 FROM node:20-alpine AS backend-builder
 WORKDIR /app/backend
 COPY backend/package*.json ./
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
 COPY backend . 
 RUN npm run build
+
+# Production-only dependencies for backend runtime image
+FROM backend-builder AS backend-prod-deps
+WORKDIR /app/backend
+RUN npm prune --omit=dev
 
 # Build stage for frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
 COPY frontend .
 RUN npm run build
 
@@ -18,8 +25,9 @@ RUN npm run build
 FROM node:20-alpine AS backend-prod
 WORKDIR /app
 COPY --from=backend-builder /app/backend/dist ./dist
+COPY --from=backend-builder /app/backend/seed.ts ./seed.ts
+COPY --from=backend-prod-deps /app/backend/node_modules ./node_modules
 COPY backend/package*.json ./
-RUN npm install --production
 EXPOSE 3001
 CMD ["node", "dist/server.js"]
 

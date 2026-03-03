@@ -4,7 +4,7 @@ import { Request, Response, NextFunction } from 'express';
  * Security headers middleware
  * Adds important security headers to all responses
  */
-export function securityHeaders(req: Request, res: Response, next: NextFunction) {
+export function securityHeaders(_req: Request, res: Response, next: NextFunction) {
   // Prevent MIME type sniffing
   res.set('X-Content-Type-Options', 'nosniff');
 
@@ -37,7 +37,7 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
 /**
  * Input sanitization - prevent common attacks
  */
-export function sanitizeInput(req: Request, res: Response, next: NextFunction) {
+export function sanitizeInput(req: Request, _res: Response, next: NextFunction) {
   const sanitize = (value: any): any => {
     if (typeof value === 'string') {
       // Remove potentially dangerous characters

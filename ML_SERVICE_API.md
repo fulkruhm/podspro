@@ -173,6 +173,14 @@ Forecasts future demand using **exponential smoothing** with trend analysis.
   "product_id": "PRODUCT_001",
   "store_id": "STORE_001",
   "historical_demand": [20, 22, 19, 25, 23, 21, 24, 22, 26, 25],
+  "historical_features": [
+    { "feature_date": "2026-03-01", "promo_flag": false, "holiday_flag": false, "weather_index": 0.98 },
+    { "feature_date": "2026-03-02", "promo_flag": true, "holiday_flag": false, "weather_index": 1.05 }
+  ],
+  "future_features": [
+    { "feature_date": "2026-03-03", "promo_flag": true, "holiday_flag": false, "weather_index": 1.07 },
+    { "feature_date": "2026-03-04", "promo_flag": false, "holiday_flag": true, "weather_index": 0.96 }
+  ],
   "forecast_days": 7
 }
 ```
@@ -184,7 +192,11 @@ Forecasts future demand using **exponential smoothing** with trend analysis.
   "store_id": "STORE_001",
   "forecast": [24.2, 24.5, 24.8, 25.1, 25.4, 25.7, 26.0],
   "confidence_interval": [12.5, 37.2],
-  "trend": "📈 Increasing"
+  "trend": "📈 Increasing",
+  "explainability": [
+    "D+1: increasing trend, +4% vs last-7-day baseline, confidence 12-37.",
+    "D+2: increasing trend, +5% vs last-7-day baseline, confidence 12-37."
+  ]
 }
 ```
 
@@ -195,12 +207,25 @@ Forecasts future demand using **exponential smoothing** with trend analysis.
 | `product_id` | String | Required | Product identifier |
 | `store_id` | String | Required | Store location |
 | `historical_demand` | Array[Float] | Required | Last 30-60 days of demand (minimum 3 points) |
+| `historical_features` | Array[Object] | Optional | Per-day feature flags aligned to `historical_demand` |
+| `future_features` | Array[Object] | Optional | Per-day feature flags for forecast horizon |
 | `forecast_days` | Integer | 7 | Number of days to forecast |
+
+Feature object fields:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `feature_date` | String (YYYY-MM-DD) | Optional | Date used for calendar covariates |
+| `promo_flag` | Boolean | `false` | Promotion active for the day |
+| `holiday_flag` | Boolean | `false` | Holiday/event day indicator |
+| `weather_index` | Float | `1.0` | Relative weather impact factor |
 
 **Forecasting Method:**
 
 - **Algorithm:** Exponential Smoothing (α=0.3)
 - **Trend:** Linear regression on historical data
+- **Feature Effects:** Applies promo/holiday/weather adjustments from feature vectors
+- **Calendar Effects:** Uses `feature_date` to model day-of-week, day-of-month, and week-of-year seasonality
 - **Confidence:** 95% confidence interval using standard deviation
 - **Trend Labels:** "📈 Increasing", "📉 Decreasing", "➡️ Stable"
 

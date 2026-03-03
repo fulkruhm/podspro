@@ -141,9 +141,14 @@ export const sendMessageStream = async (
 
 export const fetchRealtimeData = async () => {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/chat/realtime-data`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/chat/realtime-data?_=${Date.now()}`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+      cache: 'no-store',
     });
     if (!response.ok) throw new Error('Failed to fetch realtime data');
     return await response.json();

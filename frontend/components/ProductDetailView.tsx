@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product } from '../types';
-import { forecastDemand } from '../services/mlService';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
@@ -43,23 +42,20 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   currentPosition,
   totalCount
 }) => {
+  type FeatureDriver = 'promo' | 'holiday' | 'weather';
+
   const [ropValue, setRopValue] = useState(product.reorderPoint);
   const [safetyStockValue, setSafetyStockValue] = useState(product.safetyStock);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [mlForecast, setMlForecast] = useState<number[] | null>(null);
-  const [isForecastLoading, setIsForecastLoading] = useState(false);
-  const [forecastSource, setForecastSource] = useState<'ml' | 'fallback'>('fallback');
+  const [activeFeatureDriver, setActiveFeatureDriver] = useState<FeatureDriver | null>(null);
 
   // Sync local state when product prop changes
   useEffect(() => {
     setRopValue(product.reorderPoint);
     setSafetyStockValue(product.safetyStock);
+    setActiveFeatureDriver(null);
   }, [product.id, product.reorderPoint, product.safetyStock]);
-
-  // Simulated AI Suggestions
-  const aiSuggestedROP = Math.round(product.reorderPoint * 1.15);
-  const aiSuggestedSafetyStock = Math.round(product.safetyStock * 1.08);
 
   // Use a fixed reference date for consistency in the demo
   const today = new Date(2026, 1, 28); // Feb 28, 2026
@@ -69,7 +65,7 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   };
 
   const historyCount = 7;
-  const forecastCount = 7;
+  const forecastCount = Math.max(7, product.forecastedDemand?.length || 0);
 
   const finalHistory = useMemo(() => {
     const rawHistory = [...(product.historicalDemand || [])];
@@ -77,50 +73,134 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
     return rawHistory.slice(-historyCount);
   }, [product.historicalDemand, product.avgDailyDemand]);
 
-  const historySignature = finalHistory.join(',');
-
-  useEffect(() => {
-    let isMounted = true;
-    let debounceTimer: ReturnType<typeof setTimeout>;
-
-    const loadMlForecast = async () => {
-      setIsForecastLoading(true);
-      try {
-        const result = await forecastDemand({
-          product_id: product.id,
-          store_id: product.store,
-          historical_demand: finalHistory,
-          forecast_days: forecastCount,
-        });
-
-        if (!isMounted) return;
-        const normalizedForecast = (result.forecast || [])
-          .slice(0, forecastCount)
-          .map((value) => Math.max(0, Math.round(value)));
-        setMlForecast(normalizedForecast);
-        setForecastSource('ml');
-      } catch (error) {
-        if (!isMounted) return;
-        setMlForecast(null);
-        setForecastSource('fallback');
-      } finally {
-        if (isMounted) setIsForecastLoading(false);
-      }
-    };
-
-    debounceTimer = setTimeout(() => {
-      loadMlForecast();
-    }, 250);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(debounceTimer);
-    };
-  }, [product.id, product.store, forecastCount, historySignature]);
-
-  const rawForecast = mlForecast && mlForecast.length > 0 ? [...mlForecast] : [...(product.forecastedDemand || [])];
+  const rawForecast = [...(product.forecastedDemand || [])];
   while (rawForecast.length < forecastCount) rawForecast.push(product.avgDailyDemand);
   const finalForecast = rawForecast.slice(0, forecastCount);
+
+  const aiRecommendation = useMemo(() => {
+    const leadTimeDays = Math.max(1, Number(product.leadTime) || 1);
+    const history = finalHistory.length > 0 ? finalHistory : [Math.max(0, product.avgDailyDemand || 0)];
+    const historyMean = history.reduce((sum, value) => sum + value, 0) / history.length;
+    const variance = history.reduce((sum, value) => sum + Math.pow(value - historyMean, 2), 0) / history.length;
+    const demandStdDev = Math.sqrt(Math.max(variance, 0));
+
+    const serviceLevelZ = product.status === 'critical'
+      ? 1.96
+      : product.status === 'low'
+        ? 1.65
+        : product.status === 'optimal'
+          ? 1.28
+          : 1.04;
+
+    const suggestedSafetyStock = Math.max(
+      0,
+      Math.round(serviceLevelZ * demandStdDev * Math.sqrt(leadTimeDays))
+    );
+
+    let leadTimeDemand = 0;
+    for (let i = 0; i < leadTimeDays; i++) {
+      leadTimeDemand += finalForecast[i] ?? Math.max(0, product.avgDailyDemand || 0);
+    }
+
+    const suggestedROP = Math.max(0, Math.round(leadTimeDemand + suggestedSafetyStock));
+
+    const ropDelta = suggestedROP - product.reorderPoint;
+    const safetyDelta = suggestedSafetyStock - product.safetyStock;
+
+    const ropNeedsChange = Math.abs(ropDelta) >= 2;
+    const safetyNeedsChange = Math.abs(safetyDelta) >= 2;
+
+    return {
+      suggestedROP,
+      suggestedSafetyStock,
+      ropDelta,
+      safetyDelta,
+      ropNeedsChange,
+      safetyNeedsChange,
+    };
+  }, [finalForecast, finalHistory, product.avgDailyDemand, product.leadTime, product.reorderPoint, product.safetyStock, product.status]);
+
+  const baselineWindow = finalHistory.slice(-7);
+  const baselineAvg = baselineWindow.length
+    ? baselineWindow.reduce((sum, value) => sum + value, 0) / baselineWindow.length
+    : null;
+
+  const confidenceWindow = finalHistory.slice(-14);
+  const confidenceMean = confidenceWindow.length
+    ? confidenceWindow.reduce((sum, value) => sum + value, 0) / confidenceWindow.length
+    : null;
+  const confidenceStdDev = confidenceWindow.length > 1 && confidenceMean !== null
+    ? Math.sqrt(
+      confidenceWindow.reduce((sum, value) => {
+        const delta = value - confidenceMean;
+        return sum + (delta * delta);
+      }, 0) / (confidenceWindow.length - 1)
+    )
+    : null;
+
+  const forecastSlope = finalForecast.length > 1
+    ? (finalForecast[finalForecast.length - 1] - finalForecast[0]) / (finalForecast.length - 1)
+    : 0;
+
+  const inferredTrend = forecastSlope > 0.5
+    ? 'increasing'
+    : forecastSlope < -0.5
+      ? 'decreasing'
+      : 'stable';
+
+  const buildFallbackExplainability = (dayIndex: number, forecastValue: number) => {
+    const variancePercent = baselineAvg && baselineAvg > 0
+      ? Math.round(((forecastValue - baselineAvg) / baselineAvg) * 100)
+      : null;
+
+    const horizonScale = Math.sqrt(dayIndex + 1);
+    const intervalHalfWidth = confidenceStdDev && confidenceStdDev > 0
+      ? Math.max(1, Math.round(confidenceStdDev * 1.28 * horizonScale))
+      : Math.max(1, Math.round(Math.max(1, forecastValue) * 0.12 * horizonScale));
+
+    const lowerBound = Math.max(0, Math.round(forecastValue - intervalHalfWidth));
+    const upperBound = Math.max(lowerBound, Math.round(forecastValue + intervalHalfWidth));
+
+    return `D+${dayIndex + 1}: ${inferredTrend} trend${variancePercent === null ? '' : `, ${variancePercent >= 0 ? '+' : ''}${variancePercent}% vs last-7-day baseline`}, confidence ${lowerBound}-${upperBound} (estimated from demand variance).`;
+  };
+
+  const finalExplainability = Array.from({ length: forecastCount }, (_, index) => {
+    const persisted = product.forecastedExplainability?.[index];
+    const isSeedPlaceholder = typeof persisted === 'string' && /^seed baseline forecast/i.test(persisted.trim());
+
+    if (typeof persisted === 'string' && persisted.trim().length > 0 && !isSeedPlaceholder) {
+      return persisted;
+    }
+
+    return buildFallbackExplainability(index, finalForecast[index]);
+  });
+
+  const featureDriverSummary = {
+    promoDays: finalExplainability.filter((entry) => /promo\s+(?:uplift|effect)/i.test(entry)).length,
+    holidayDays: finalExplainability.filter((entry) => /holiday\s+lift/i.test(entry)).length,
+    weatherDays: finalExplainability.filter((entry) => /weather\s+index/i.test(entry)).length,
+    calendarDays: finalExplainability.filter((entry) => /calendar\s+dow/i.test(entry)).length,
+  };
+
+  const activeFeatureMatchCount = activeFeatureDriver === 'promo'
+    ? featureDriverSummary.promoDays
+    : activeFeatureDriver === 'holiday'
+      ? featureDriverSummary.holidayDays
+      : activeFeatureDriver === 'weather'
+        ? featureDriverSummary.weatherDays
+        : 0;
+
+  const activeFeatureLabel = activeFeatureDriver
+    ? `${activeFeatureDriver.charAt(0).toUpperCase()}${activeFeatureDriver.slice(1)}`
+    : null;
+
+  const activeFeaturePillClassName = activeFeatureDriver === 'promo'
+    ? 'bg-violet-50 text-violet-700 border-violet-200'
+    : activeFeatureDriver === 'holiday'
+      ? 'bg-blue-50 text-blue-700 border-blue-200'
+      : activeFeatureDriver === 'weather'
+        ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+        : 'bg-indigo-50 text-indigo-700 border-indigo-200';
 
   const historicalData = finalHistory.map((demand, index) => {
     const date = new Date(today);
@@ -129,23 +209,72 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   });
 
   const forecastData = finalForecast.map((forecast, index) => {
+    const explainability = finalExplainability[index];
     const date = new Date(today);
     date.setDate(today.getDate() + index);
     return {
       date: formatDate(date),
-      forecast: index === 0 ? historicalData[historicalData.length - 1].demand : forecast
+      forecast: index === 0 ? historicalData[historicalData.length - 1].demand : forecast,
+      explainability,
+      hasPromoDriver: /promo\s+uplift/i.test(explainability),
+      hasHolidayDriver: /holiday\s+lift/i.test(explainability),
+      hasWeatherDriver: /weather\s+index/i.test(explainability),
     };
   });
 
-  const dataMap = new Map<string, { date: string, demand?: number, forecast?: number }>();
+  const dataMap = new Map<string, {
+    date: string,
+    demand?: number,
+    forecast?: number,
+    explainability?: string,
+    hasPromoDriver?: boolean,
+    hasHolidayDriver?: boolean,
+    hasWeatherDriver?: boolean,
+  }>();
   historicalData.forEach(d => dataMap.set(d.date, { date: d.date, demand: d.demand }));
   forecastData.forEach(d => {
     const existing = dataMap.get(d.date);
-    if (existing) existing.forecast = d.forecast;
-    else dataMap.set(d.date, { date: d.date, forecast: d.forecast });
+    if (existing) {
+      existing.forecast = d.forecast;
+      existing.explainability = d.explainability;
+      existing.hasPromoDriver = d.hasPromoDriver;
+      existing.hasHolidayDriver = d.hasHolidayDriver;
+      existing.hasWeatherDriver = d.hasWeatherDriver;
+    }
+    else dataMap.set(d.date, {
+      date: d.date,
+      forecast: d.forecast,
+      explainability: d.explainability,
+      hasPromoDriver: d.hasPromoDriver,
+      hasHolidayDriver: d.hasHolidayDriver,
+      hasWeatherDriver: d.hasWeatherDriver,
+    });
   });
 
   const combinedData = Array.from(dataMap.values());
+
+  const chartData = useMemo(() => {
+    if (!activeFeatureDriver) {
+      return combinedData;
+    }
+
+    return combinedData.map((point) => {
+      const matchesDriver = activeFeatureDriver === 'promo'
+        ? point.hasPromoDriver
+        : activeFeatureDriver === 'holiday'
+          ? point.hasHolidayDriver
+          : point.hasWeatherDriver;
+
+      if (point.forecast === undefined) {
+        return point;
+      }
+
+      return {
+        ...point,
+        forecast: matchesDriver ? point.forecast : undefined,
+      };
+    });
+  }, [combinedData, activeFeatureDriver]);
 
   const handleAction = (msg: string, updates?: Partial<Product>) => {
     setIsUpdating(true);
@@ -160,11 +289,22 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   };
 
   const applyAISuggestion = (type: 'rop' | 'safety') => {
-    const newVal = type === 'rop' ? aiSuggestedROP : aiSuggestedSafetyStock;
     if (type === 'rop') {
+      if (!aiRecommendation.ropNeedsChange) {
+        handleAction('No change needed for Reorder Point');
+        return;
+      }
+
+      const newVal = aiRecommendation.suggestedROP;
       setRopValue(newVal);
       handleAction(`AI optimization applied to Reorder Point`, { reorderPoint: newVal });
     } else {
+      if (!aiRecommendation.safetyNeedsChange) {
+        handleAction('No change needed for Safety Stock');
+        return;
+      }
+
+      const newVal = aiRecommendation.suggestedSafetyStock;
       setSafetyStockValue(newVal);
       handleAction(`AI optimization applied to Safety Stock`, { safetyStock: newVal });
     }
@@ -216,6 +356,144 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   };
 
   const primaryAction = getPrimaryAction();
+
+  const renderForecastTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || !payload.length) {
+      return null;
+    }
+
+    const point = payload[0]?.payload || {};
+    const explainabilityText: string = point.explainability || '';
+
+    const trendMatch = explainabilityText.match(/\b(increasing|decreasing|stable)\b/i);
+    const varianceMatch = explainabilityText.match(/([+-]?\d+)%\s+vs\s+last-7-day\s+baseline/i);
+    const confidenceMatch = explainabilityText.match(/confidence\s+(\d+\s*-\s*\d+)/i);
+
+    const trendValue = trendMatch?.[1]?.toLowerCase();
+    const trendClassName = trendValue === 'increasing'
+      ? 'text-emerald-700'
+      : trendValue === 'decreasing'
+        ? 'text-red-700'
+        : 'text-amber-700';
+
+    const varianceValue = varianceMatch?.[1] || null;
+    const varianceNumber = varianceValue ? Number(varianceValue.replace('%', '')) : null;
+    const varianceClassName = varianceNumber === null
+      ? 'text-slate-700'
+      : varianceNumber >= 0
+        ? 'text-emerald-700'
+        : 'text-red-700';
+
+    const confidenceRange = confidenceMatch?.[1] || null;
+    const confidenceParts = confidenceRange?.split('-').map((part: string) => Number(part.trim())) || [];
+    const confidenceSpread = confidenceParts.length === 2 ? Math.abs(confidenceParts[1] - confidenceParts[0]) : null;
+    const confidenceClassName = confidenceSpread === null
+      ? 'text-slate-700'
+      : confidenceSpread <= 10
+        ? 'text-emerald-700'
+        : confidenceSpread <= 20
+          ? 'text-amber-700'
+          : 'text-red-700';
+
+      const promoMatch = explainabilityText.match(/promo\s+(?:uplift|effect)\s+([+-]?\d+)%/i);
+    const holidayMatch = explainabilityText.match(/holiday\s+lift\s+([+-]?\d+)%/i);
+      const weatherMatch = explainabilityText.match(/weather\s+index\s+([0-9]*\.?[0-9]+)(?:\s*\(([+-]?\d+)%\))?/i);
+      const calendarDetailedMatch = explainabilityText.match(/calendar\s+dow\s+([+-]?\d+)%\s*,\s*dom\s+([+-]?\d+)%\s*,\s*woy\s+([+-]?\d+)%/i);
+      const calendarSimpleMatch = explainabilityText.match(/calendar\s+dow\s+([a-z]{3}),\s*dom\s+(\d{1,2}),\s*woy\s+(\d{1,2})/i);
+
+    const featureDrivers: Array<{ label: string; value: string; className: string }> = [];
+    if (promoMatch) {
+      featureDrivers.push({
+        label: 'Promo',
+        value: `${promoMatch[1]}%`,
+        className: 'bg-violet-50 text-violet-700 border-violet-200',
+      });
+    }
+    if (holidayMatch) {
+      featureDrivers.push({
+        label: 'Holiday',
+        value: `${holidayMatch[1]}%`,
+        className: 'bg-blue-50 text-blue-700 border-blue-200',
+      });
+    }
+    if (weatherMatch) {
+      const weatherDelta = weatherMatch[2] ? ` (${weatherMatch[2]}%)` : '';
+      featureDrivers.push({
+        label: 'Weather',
+        value: `${weatherMatch[1]}${weatherDelta}`,
+        className: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+      });
+    }
+    if (calendarDetailedMatch) {
+      featureDrivers.push({
+        label: 'Calendar',
+        value: `DOW ${calendarDetailedMatch[1]}% • DOM ${calendarDetailedMatch[2]}% • WOY ${calendarDetailedMatch[3]}%`,
+        className: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      });
+    } else if (calendarSimpleMatch) {
+      featureDrivers.push({
+        label: 'Calendar',
+        value: `${calendarSimpleMatch[1]} • D${calendarSimpleMatch[2]} • W${calendarSimpleMatch[3]}`,
+        className: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      });
+    }
+
+    return (
+      <div className="rounded-xl bg-white border border-slate-200 shadow-lg p-3 max-w-xs">
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
+        {point.demand !== undefined && (
+          <p className="text-xs text-slate-700 mt-1">History: <span className="font-bold">{point.demand}</span></p>
+        )}
+        {point.forecast !== undefined && (
+          <p className="text-xs text-slate-700">Forecast: <span className="font-bold">{point.forecast}</span></p>
+        )}
+        {point.forecast !== undefined && point.explainability && (
+          <div className="mt-2">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Model Explainability</p>
+            {(trendMatch || varianceMatch || confidenceMatch) && (
+              <div className="mt-1 space-y-0.5 text-[11px] text-slate-700">
+                {trendMatch && (
+                  <p className="flex items-center gap-1">
+                    <span className={`inline-block w-2 h-2 rounded-full ${trendClassName.replace('text-', 'bg-')}`}></span>
+                    <span>Demand Direction: <span className={`font-black ${trendClassName}`}>{trendMatch[1].toLowerCase()}</span></span>
+                  </p>
+                )}
+                {varianceMatch && (
+                  <p className="flex items-center gap-1">
+                    <span className={`inline-block w-2 h-2 rounded-full ${varianceClassName.replace('text-', 'bg-')}`}></span>
+                    <span>Demand Signal: <span className={`font-black ${varianceClassName}`}>{varianceMatch[1]} vs baseline</span></span>
+                  </p>
+                )}
+                {confidenceMatch && (
+                  <p className="flex items-center gap-1">
+                    <span className={`inline-block w-2 h-2 rounded-full ${confidenceClassName.replace('text-', 'bg-')}`}></span>
+                    <span>Confidence Range: <span className={`font-black ${confidenceClassName}`}>{confidenceMatch[1]}</span></span>
+                  </p>
+                )}
+              </div>
+            )}
+            {featureDrivers.length > 0 && (
+              <div className="mt-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Drivers</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {featureDrivers.map((driver) => (
+                    <span
+                      key={driver.label}
+                      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${driver.className}`}
+                    >
+                      <span>{driver.label}</span>
+                      <span>{driver.value}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">{point.explainability}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <motion.div 
@@ -342,10 +620,17 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reorder Point (ROP)</p>
                 <button 
                   onClick={() => applyAISuggestion('rop')}
-                  className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center"
+                  disabled={!aiRecommendation.ropNeedsChange}
+                  className={`text-[10px] font-bold flex items-center ${
+                    aiRecommendation.ropNeedsChange
+                      ? 'text-indigo-600 hover:underline'
+                      : 'text-emerald-700 cursor-default'
+                  }`}
                 >
                   <TrendingUp className="w-3 h-3 mr-1" />
-                  AI Suggest: {aiSuggestedROP}
+                  {aiRecommendation.ropNeedsChange
+                    ? `AI Suggest: ${aiRecommendation.suggestedROP}`
+                    : 'AI Suggest: No change needed'}
                 </button>
               </div>
               <div className="flex space-x-2">
@@ -370,10 +655,17 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Safety Stock</p>
                 <button 
                   onClick={() => applyAISuggestion('safety')}
-                  className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center"
+                  disabled={!aiRecommendation.safetyNeedsChange}
+                  className={`text-[10px] font-bold flex items-center ${
+                    aiRecommendation.safetyNeedsChange
+                      ? 'text-indigo-600 hover:underline'
+                      : 'text-emerald-700 cursor-default'
+                  }`}
                 >
                   <TrendingUp className="w-3 h-3 mr-1" />
-                  AI Suggest: {aiSuggestedSafetyStock}
+                  {aiRecommendation.safetyNeedsChange
+                    ? `AI Suggest: ${aiRecommendation.suggestedSafetyStock}`
+                    : 'AI Suggest: No change needed'}
                 </button>
               </div>
               <div className="flex space-x-2">
@@ -444,18 +736,22 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 </div>
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-emerald-500 rounded-full mr-2"></div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">{isForecastLoading ? 'Forecast (Updating...)' : 'Forecast (ML)'}</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Forecast (Persisted)</span>
                 </div>
-                {!isForecastLoading && (
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${forecastSource === 'ml' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {forecastSource === 'ml' ? 'ML' : 'Fallback'}
-                  </span>
-                )}
               </div>
             </div>
             <div className="h-64">
+              {activeFeatureDriver && activeFeatureLabel && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Filtered by</span>
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${activeFeaturePillClassName}`}>
+                    <span>{activeFeatureLabel}</span>
+                    <span>{activeFeatureMatchCount}d</span>
+                  </span>
+                </div>
+              )}
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={combinedData}>
+                <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorDemand" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
@@ -473,6 +769,8 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     tick={{ fill: '#94a3b8' }} 
                     axisLine={false}
                     tickLine={false}
+                    interval={0}
+                    minTickGap={0}
                   />
                   <YAxis 
                     fontSize={10} 
@@ -481,7 +779,7 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     tickLine={false}
                   />
                   <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                    content={renderForecastTooltip}
                   />
                   <Area 
                     type="monotone" 
@@ -506,6 +804,93 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                   />
                 </AreaChart>
               </ResponsiveContainer>
+            </div>
+            <div className="mt-3 px-1">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Hover a forecast point to see model explainability
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-700"></span>
+                  Higher Demand Confidence
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-700"></span>
+                  Mixed Signal
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-700"></span>
+                  Low Confidence / Risk
+                </span>
+              </div>
+              <div className="mt-2">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Feature Drivers in Horizon</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  <button
+                    onClick={() => featureDriverSummary.promoDays > 0 && setActiveFeatureDriver(prev => prev === 'promo' ? null : 'promo')}
+                    disabled={featureDriverSummary.promoDays === 0}
+                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition ${
+                      featureDriverSummary.promoDays === 0
+                        ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
+                        : activeFeatureDriver === 'promo'
+                          ? 'bg-violet-700 text-white border-violet-700'
+                          : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
+                    }`}
+                  >
+                    <span>Promo</span>
+                    <span>{featureDriverSummary.promoDays}d</span>
+                  </button>
+                  <button
+                    onClick={() => featureDriverSummary.holidayDays > 0 && setActiveFeatureDriver(prev => prev === 'holiday' ? null : 'holiday')}
+                    disabled={featureDriverSummary.holidayDays === 0}
+                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition ${
+                      featureDriverSummary.holidayDays === 0
+                        ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
+                        : activeFeatureDriver === 'holiday'
+                          ? 'bg-blue-700 text-white border-blue-700'
+                          : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                    }`}
+                  >
+                    <span>Holiday</span>
+                    <span>{featureDriverSummary.holidayDays}d</span>
+                  </button>
+                  <button
+                    onClick={() => featureDriverSummary.weatherDays > 0 && setActiveFeatureDriver(prev => prev === 'weather' ? null : 'weather')}
+                    disabled={featureDriverSummary.weatherDays === 0}
+                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition ${
+                      featureDriverSummary.weatherDays === 0
+                        ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
+                        : activeFeatureDriver === 'weather'
+                          ? 'bg-cyan-700 text-white border-cyan-700'
+                          : 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100'
+                    }`}
+                  >
+                    <span>Weather</span>
+                    <span>{featureDriverSummary.weatherDays}d</span>
+                  </button>
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    featureDriverSummary.calendarDays === 0
+                      ? 'bg-slate-50 text-slate-400 border-slate-200'
+                      : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  }`}>
+                    <span>Calendar</span>
+                    <span>{featureDriverSummary.calendarDays}d</span>
+                  </span>
+                  {activeFeatureDriver && (
+                    <button
+                      onClick={() => setActiveFeatureDriver(null)}
+                      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
+                    >
+                      Clear Filter
+                    </button>
+                  )}
+                </div>
+                {featureDriverSummary.promoDays === 0 && featureDriverSummary.holidayDays === 0 && featureDriverSummary.weatherDays === 0 && featureDriverSummary.calendarDays === 0 && (
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    No feature signals found in current persisted forecast. Run a fresh forecast batch to populate Promo/Holiday/Weather drivers.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 

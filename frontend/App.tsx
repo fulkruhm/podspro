@@ -7,6 +7,7 @@ import LogisticsView from './components/LogisticsView';
 import AssistantView from './components/AssistantView';
 import ProfileView from './components/ProfileView';
 import UserManagementView from './components/UserManagementView';
+import ForecastReviewView from './components/ForecastReviewView';
 import Onboarding from './components/Onboarding';
 import FilterBar from './components/FilterBar';
 import LoginView, { INITIAL_USERS } from './components/LoginView';
@@ -234,7 +235,7 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    const showFilter = ['dashboard', 'inventory'].includes(activeTab);
+    const showFilter = ['dashboard', 'inventory', 'forecastreview'].includes(activeTab);
 
     return (
       <div className="flex flex-col">
@@ -257,6 +258,8 @@ const App: React.FC = () => {
             onRefresh={handleRefreshData}
             lastUpdated={lastUpdated}
             userRole={currentUser.role}
+            currentUserName={currentUser.name}
+            filters={filters}
           />
         )}
         {activeTab === 'inventory' && (
@@ -289,6 +292,14 @@ const App: React.FC = () => {
             currentUser={currentUser}
             auditLogs={auditLogs}
             products={products}
+          />
+        )}
+        {activeTab === 'forecastreview' && (currentUser.role === 'admin' || currentUser.role === 'sysadmin') && (
+          <ForecastReviewView
+            userRole={currentUser.role}
+            currentUserName={currentUser.name}
+            filters={filters}
+            onRefreshData={handleRefreshData}
           />
         )}
       </div>

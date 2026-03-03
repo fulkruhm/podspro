@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, Role, AuditLog } from '../types';
+import { User, AuditLog } from '../types';
 
 interface LoginViewProps {
   onLogin: (user: User) => void;
@@ -24,7 +24,7 @@ export const INITIAL_USERS: User[] = [
   { id: 'l1', name: 'Logistics Analyst 1', username: 'log1', role: 'logistics_user', email: 'log1@pods-logistics.com', phoneNumber: '+1 (555) 0301', password: 'log1', status: 'active', failedLoginAttempts: 0, isLocked: false },
 ];
 
-const LoginView: React.FC<LoginViewProps> = ({ onLogin, systemUsers, onUpdateUser, addAuditLog }) => {
+const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

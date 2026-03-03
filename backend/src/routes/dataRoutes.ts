@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
 import { getProducts, getProductById, getRoutes, getRouteById, updateProduct } from '../db.js';
 import {
   validateRequestParams,
@@ -12,7 +11,7 @@ import { apiLimiter, strictLimiter } from '../middleware/rateLimiter.js';
 export const dataRouter = Router();
 
 // Get all products
-dataRouter.get('/products', apiLimiter, async (req: Request, res: Response) => {
+dataRouter.get('/products', apiLimiter, async (_req: Request, res: Response) => {
   try {
     const products = await getProducts();
     res.json({ products });
@@ -61,7 +60,7 @@ dataRouter.put(
 );
 
 // Get all freight routes
-dataRouter.get('/routes', apiLimiter, async (req: Request, res: Response) => {
+dataRouter.get('/routes', apiLimiter, async (_req: Request, res: Response) => {
   try {
     const routes = await getRoutes();
     res.json({ routes });

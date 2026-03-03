@@ -40,6 +40,7 @@ export interface Product {
   turnoverRate?: number;
   lastRestockDate?: string;
   forecastedDemand?: number[]; // Next 7 days
+  forecastedExplainability?: string[];
 }
 
 export interface FreightRoute {

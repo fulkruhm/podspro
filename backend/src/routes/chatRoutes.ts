@@ -37,7 +37,7 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T
 };
 
 // Initialize a new chat session
-chatRouter.post('/start', strictLimiter, (req: Request, res: Response) => {
+chatRouter.post('/start', strictLimiter, (_req: Request, res: Response) => {
   try {
     const sessionId = Date.now().toString();
     
@@ -166,7 +166,7 @@ chatRouter.post(
 );
 
 // Fetch realtime data - with rate limiting
-chatRouter.get('/realtime-data', apiLimiter, async (req: Request, res: Response) => {
+chatRouter.get('/realtime-data', apiLimiter, async (_req: Request, res: Response) => {
   try {
     const data = await fetchRealtimeData();
     res.json(data);

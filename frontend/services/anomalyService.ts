@@ -1,5 +1,7 @@
 import { Product, InventoryAnomaly } from "../types";
 
+export type { InventoryAnomaly } from "../types";
+
 // Use relative paths to work with nginx proxy
 const API_BASE_URL = '/api';
 

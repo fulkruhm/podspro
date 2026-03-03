@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Product } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { detectInventoryAnomalies, InventoryAnomaly } from '../services/anomalyService';
 import ProductDetailView from './ProductDetailView';
 

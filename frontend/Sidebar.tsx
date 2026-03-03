@@ -13,6 +13,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, onLogo
   const allItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', roles: ['admin', 'store_user', 'logistics_user', 'sysadmin'] },
     { id: 'inventory', label: 'Inventory Engine', icon: '📦', roles: ['admin', 'store_user', 'sysadmin'], description: 'Store-level product insights' },
+    { id: 'forecastreview', label: 'Forecast Review', icon: '🧠', roles: ['admin', 'sysadmin'], description: 'Admin anomaly triage queue' },
     { id: 'logistics', label: 'Logistics Engine', icon: '🚛', roles: ['admin', 'logistics_user', 'sysadmin'] },
     { id: 'assistant', label: 'AI Advisor', icon: '🤖', roles: ['admin', 'store_user', 'logistics_user', 'sysadmin'] },
     { id: 'usermanagement', label: 'User Management', icon: '👥', roles: ['sysadmin'] },

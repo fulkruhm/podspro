@@ -79,6 +79,7 @@ export interface ForecastResult {
   forecast: number[];
   confidence_interval: [number, number];
   trend: string;
+  explainability?: string[];
 }
 
 export interface MLServiceHealth {
@@ -95,6 +96,72 @@ export interface MLServiceInfo {
   version: string;
   capabilities: string[];
   libraries: Record<string, string>;
+}
+
+export interface ForecastBatchRun {
+  id: number;
+  job_type: string;
+  status: 'running' | 'success' | 'failed' | 'partial_success';
+  triggered_by?: string;
+  started_at: string;
+  ended_at?: string;
+  total_items?: number;
+  succeeded_items?: number;
+  failed_items?: number;
+  error_summary?: string;
+}
+
+export interface ForecastBatchStatusResponse {
+  latest_run: ForecastBatchRun | null;
+  next_scheduled_run_at: string | null;
+}
+
+export interface ForecastBatchTriggerResponse {
+  run_id: number;
+  status?: 'running' | 'success' | 'failed' | 'partial_success';
+  message?: string;
+  total_store_products?: number;
+  succeeded?: number;
+  failed?: number;
+  errors?: Array<{ product_id: string; store_id: string; error: string }>;
+}
+
+export interface ForecastReviewItem {
+  product_id: string;
+  product_name: string;
+  store_id: string;
+  region: string;
+  department: string;
+  history_avg: number;
+  forecast_avg: number;
+  history_std: number;
+  forecast_std: number;
+  confidence_spread_avg: number;
+  bias_pct: number;
+  anomaly_score: number;
+  recommended_action: 'accept_model' | 'adjust_baseline' | 'flag_data_issue' | 'request_override';
+  latest_decision_status?: 'accept_model' | 'adjust_baseline' | 'flag_data_issue' | 'request_override';
+  latest_baseline_adjustment_pct?: number;
+  latest_notes?: string;
+  latest_decided_by?: string;
+  latest_decision_at?: string;
+}
+
+export interface ForecastReviewItemsResponse {
+  items: ForecastReviewItem[];
+}
+
+export interface ForecastReviewDecisionResponse {
+  decision: {
+    id: number;
+    product_id: string;
+    store_id: string;
+    decision_status: 'accept_model' | 'adjust_baseline' | 'flag_data_issue' | 'request_override';
+    baseline_adjustment_pct?: number;
+    notes?: string;
+    decided_by?: string;
+    created_at: string;
+  };
 }
 
 /**
@@ -231,4 +298,119 @@ export async function runBatchAnalysis(
     console.error('Batch analysis error:', error);
     throw error;
   }
+}
+
+/**
+ * Get latest forecast batch run status (admin only)
+ */
+export async function getForecastBatchStatus(
+  userRole: string
+): Promise<ForecastBatchStatusResponse> {
+  const response = await fetch(`${ML_API_BASE}/forecast/batch/status`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-role': userRole,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to fetch forecast batch status: ${error}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Trigger forecast batch run manually (admin only)
+ */
+export async function triggerForecastBatchRun(
+  userRole: string,
+  userName: string,
+  options?: {
+    history_days?: number;
+    forecast_days?: number;
+    min_history_points?: number;
+    filters?: {
+      region?: string;
+      store?: string;
+      department?: string;
+      product?: string;
+      status?: string;
+    };
+  }
+): Promise<ForecastBatchTriggerResponse> {
+  const response = await fetch(`${ML_API_BASE}/forecast/batch/store-products`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-role': userRole,
+      'x-user-name': userName,
+    },
+    body: JSON.stringify(options || {}),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to trigger forecast batch: ${error}`);
+  }
+
+  return await response.json();
+}
+
+export async function getForecastReviewItems(
+  userRole: string,
+  limit = 50
+): Promise<ForecastReviewItemsResponse> {
+  const response = await fetch(`${ML_API_BASE}/forecast/review-items?limit=${encodeURIComponent(String(limit))}&_=${Date.now()}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-role': userRole,
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to fetch forecast review items: ${error}`);
+  }
+
+  return await response.json();
+}
+
+export async function submitForecastReviewDecision(
+  userRole: string,
+  userName: string,
+  input: {
+    productId: string;
+    storeId: string;
+    decision_status: 'accept_model' | 'adjust_baseline' | 'flag_data_issue' | 'request_override';
+    baseline_adjustment_pct?: number;
+    notes?: string;
+  }
+): Promise<ForecastReviewDecisionResponse> {
+  const response = await fetch(`${ML_API_BASE}/forecast/review-items/${encodeURIComponent(input.productId)}/${encodeURIComponent(input.storeId)}/decision`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-role': userRole,
+      'x-user-name': userName,
+    },
+    body: JSON.stringify({
+      decision_status: input.decision_status,
+      baseline_adjustment_pct: input.baseline_adjustment_pct,
+      notes: input.notes,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to submit forecast review decision: ${error}`);
+  }
+
+  return await response.json();
 }

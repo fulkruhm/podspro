@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getAllUsers, getUserById, getUserByUsername, createUser, updateUser, deleteUser } from '../db.js';
+import { getAllUsers, getUserById, createUser, updateUser, deleteUser } from '../db.js';
 import {
   validateRequestBody,
   validateRequestParams,
@@ -12,7 +12,7 @@ import { strictLimiter } from '../middleware/rateLimiter.js';
 export const userRouter = Router();
 
 // Get all users - no sensitive data
-userRouter.get('/', async (req: Request, res: Response) => {
+userRouter.get('/', async (_req: Request, res: Response) => {
   try {
     const users = await getAllUsers();
     // Filter out sensitive fields before sending to client

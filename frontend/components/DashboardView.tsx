@@ -1,7 +1,12 @@
 
 import React from 'react';
-import { Product, FreightRoute, Role } from '../types';
+import { Product, FreightRoute, Role, Filters } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line } from 'recharts';
+import {
+  getForecastBatchStatus,
+  triggerForecastBatchRun,
+  ForecastBatchStatusResponse,
+} from '../services/mlService';
 
 interface DashboardViewProps {
   triggerQuery: (query: string) => void;
@@ -9,9 +14,11 @@ interface DashboardViewProps {
   routes: FreightRoute[];
   isLoadingData: boolean;
   isRefreshing: boolean;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void> | void;
   lastUpdated: number;
   userRole: Role;
+  currentUserName: string;
+  filters: Filters;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({ 
@@ -22,14 +29,93 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   isRefreshing, 
   onRefresh, 
   lastUpdated,
-  userRole
+  userRole,
+  currentUserName,
+  filters
 }) => {
   const [currentTime, setCurrentTime] = React.useState(Date.now());
+  const [batchStatus, setBatchStatus] = React.useState<ForecastBatchStatusResponse | null>(null);
+  const [batchStatusLoading, setBatchStatusLoading] = React.useState(false);
+  const [batchRunLoading, setBatchRunLoading] = React.useState(false);
+  const [batchError, setBatchError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  const canManageForecastBatch = userRole === 'admin' || userRole === 'sysadmin';
+  const hasActiveBatchFilters = Boolean(
+    filters.region || filters.store || filters.department || filters.product || filters.status
+  );
+  const batchScopeLabel = hasActiveBatchFilters
+    ? [
+      filters.region && `Region: ${filters.region}`,
+      filters.store && `Store: ${filters.store}`,
+      filters.department && `Dept: ${filters.department}`,
+      filters.product && `Product ID: ${filters.product}`,
+      filters.status && `Status: ${filters.status}`,
+    ].filter(Boolean).join(' • ')
+    : 'All stores / products';
+
+  const loadForecastBatchStatus = React.useCallback(async () => {
+    if (!canManageForecastBatch) return;
+
+    setBatchStatusLoading(true);
+    setBatchError(null);
+    try {
+      const status = await getForecastBatchStatus(userRole);
+      setBatchStatus(status);
+    } catch (error: any) {
+      setBatchError(error?.message || 'Failed to load forecast batch status');
+    } finally {
+      setBatchStatusLoading(false);
+    }
+  }, [canManageForecastBatch, userRole]);
+
+  React.useEffect(() => {
+    loadForecastBatchStatus();
+  }, [loadForecastBatchStatus]);
+
+  React.useEffect(() => {
+    if (!canManageForecastBatch) return;
+
+    const isBatchRunning = batchStatus?.latest_run?.status === 'running';
+    if (!isBatchRunning) return;
+
+    const timer = setInterval(() => {
+      loadForecastBatchStatus();
+    }, 10000);
+
+    return () => clearInterval(timer);
+  }, [canManageForecastBatch, batchStatus?.latest_run?.status, loadForecastBatchStatus]);
+
+  const handleRunForecastBatchNow = async () => {
+    setBatchRunLoading(true);
+    setBatchError(null);
+    try {
+      await triggerForecastBatchRun(userRole, currentUserName, {
+        history_days: 56,
+        forecast_days: 14,
+        min_history_points: 14,
+        filters: {
+          region: filters.region || undefined,
+          store: filters.store || undefined,
+          department: filters.department || undefined,
+          product: filters.product || undefined,
+          status: filters.status || undefined,
+        },
+      });
+      await loadForecastBatchStatus();
+      Promise.resolve(onRefresh()).catch((refreshError: any) => {
+        console.error('Dashboard refresh after batch trigger failed:', refreshError?.message || refreshError);
+      });
+    } catch (error: any) {
+      setBatchError(error?.message || 'Failed to run forecast batch');
+    } finally {
+      setBatchRunLoading(false);
+    }
+  };
 
   const getLastSyncedLabel = () => {
     const diffMs = currentTime - lastUpdated;
@@ -69,7 +155,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   };
   const inventoryValue = products.reduce((acc, p) => acc + (p.currentStock * p.price), 0);
 
-  // Generate Inventory Alerts
   const inventoryAlerts = (userRole === 'admin' || userRole === 'sysadmin' || userRole === 'store_user')
     ? products
       .filter(p => p.status === 'critical' || p.status === 'low')
@@ -85,8 +170,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       }))
     : [];
 
-  // Generate Logistics Alerts (Freight)
-  const logisticsAlerts = (userRole === 'admin' || userRole === 'sysadmin' || userRole === 'logistics_user') 
+  const logisticsAlerts = (userRole === 'admin' || userRole === 'sysadmin' || userRole === 'logistics_user')
     ? routes
       .filter(r => r.riskLevel === 'high' || r.riskLevel === 'medium' || r.trend === 'up')
       .map(r => ({
@@ -101,7 +185,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       }))
     : [];
 
-  // Add specialized intelligence alerts for Admin and SysAdmin
   const intelAlerts = (userRole === 'admin' || userRole === 'sysadmin') ? [
     {
       type: 'intelligence',
@@ -125,7 +208,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     }
   ] : [];
 
-  // Combine and sort alerts
   const sortedAlerts = [
     ...intelAlerts.filter(a => a.severity === 'high'),
     ...logisticsAlerts.filter(a => a.severity === 'high'),
@@ -136,30 +218,30 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   ].slice(0, 5);
 
   const getDashboardTitle = () => {
-    if (userRole === 'admin' || userRole === 'sysadmin') return "Executive Portfolio Command";
-    if (userRole === 'logistics_user') return "Freight Operations Center";
-    return "Store Optimization Deck";
+    if (userRole === 'admin' || userRole === 'sysadmin') return 'Executive Portfolio Command';
+    if (userRole === 'logistics_user') return 'Freight Operations Center';
+    return 'Store Optimization Deck';
   };
 
   const healthMetrics = [
-    { 
-      name: 'Inventory Availability', 
-      value: 92, 
-      trend: [85, 88, 87, 90, 92, 91, 92], 
+    {
+      name: 'Inventory Availability',
+      value: 92,
+      trend: [85, 88, 87, 90, 92, 91, 92],
       color: '#10b981',
       description: 'Stock levels vs target'
     },
-    { 
-      name: 'Logistics Efficiency', 
-      value: 78, 
-      trend: [82, 80, 75, 76, 78, 77, 78], 
+    {
+      name: 'Logistics Efficiency',
+      value: 78,
+      trend: [82, 80, 75, 76, 78, 77, 78],
       color: '#3b82f6',
       description: 'On-time delivery performance'
     },
-    { 
-      name: 'Demand Accuracy', 
-      value: 85, 
-      trend: [70, 75, 80, 82, 85, 84, 85], 
+    {
+      name: 'Demand Accuracy',
+      value: 85,
+      trend: [70, 75, 80, 82, 85, 84, 85],
       color: '#f59e0b',
       description: 'Forecast vs actual sales'
     }
@@ -204,7 +286,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const statCards = getRoleStatCards();
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-6">
       <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">{getDashboardTitle()}</h2>
@@ -250,6 +332,72 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ))}
       </div>
+
+      {canManageForecastBatch && (
+        <div className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Forecast Batch Control</h3>
+              <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-wider">
+                Nightly schedule + on-demand admin trigger
+              </p>
+              <p className="text-[10px] text-slate-600 font-medium mt-1">
+                Run Scope: {batchScopeLabel}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadForecastBatchStatus}
+                disabled={batchStatusLoading}
+                className="px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {batchStatusLoading ? 'Refreshing...' : 'Refresh Status'}
+              </button>
+              <button
+                onClick={handleRunForecastBatchNow}
+                disabled={batchRunLoading}
+                className="px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {batchRunLoading ? 'Running...' : 'Run Batch Now'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Last Run</p>
+              <p className="text-xs text-slate-900 mt-1 font-bold">
+                {batchStatus?.latest_run?.started_at
+                  ? new Date(batchStatus.latest_run.started_at).toLocaleString()
+                  : 'No run yet'}
+              </p>
+              <p className="text-[11px] text-slate-600 mt-1">
+                Status: {batchStatus?.latest_run?.status || 'n/a'}
+              </p>
+              {typeof batchStatus?.latest_run?.succeeded_items === 'number' && (
+                <p className="text-[11px] text-slate-600">
+                  Success: {batchStatus.latest_run.succeeded_items} / {batchStatus.latest_run.total_items || 0}
+                </p>
+              )}
+            </div>
+            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Next Nightly Run</p>
+              <p className="text-xs text-slate-900 mt-1 font-bold">
+                {batchStatus?.next_scheduled_run_at
+                  ? new Date(batchStatus.next_scheduled_run_at).toLocaleString()
+                  : 'Not scheduled'}
+              </p>
+            </div>
+          </div>
+
+          {batchError && (
+            <div className="mt-3 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+              {batchError}
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* Supply Chain Health Widget */}
       <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
