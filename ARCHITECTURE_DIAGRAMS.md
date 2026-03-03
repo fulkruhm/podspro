@@ -224,24 +224,24 @@ flowchart TB
 ```mermaid
 flowchart TB
   %% External dependencies
-  FE[Frontend (React App)]
-  MLSVC[Python ML Service]
+  FE["Frontend - React App"]
+  MLSVC["Python ML Service"]
   PG[(PostgreSQL)]
-  GEM[Google Gemini API]
+  GEM["Google Gemini API"]
 
   %% Backend container
-  subgraph NODE[Node Backend (Express)]
-    MW[Cross-cutting Middleware<br/>security headers, sanitize, CORS, rate limits]
-    AUTH[Auth Routes<br/>login/session/identity]
-    USERS[User Routes<br/>RBAC + user management]
-    DATA[Data Routes<br/>products, logistics, analytics]
-    ANOM[Anomaly Routes<br/>operational anomaly APIs]
-    CHAT[Chat Routes<br/>message + stream + session lifecycle]
-    MLGW[ML Routes Gateway<br/>forecast/anomaly proxy + batch endpoints]
-    GEMSVC[Gemini Service<br/>model tiering + timeout handling]
-    SCHED[Forecast Scheduler<br/>nightly orchestration]
-    BATCH[Forecast Batch Service<br/>store-product batch execution]
-    DBL[DB Layer<br/>query + persistence functions]
+  subgraph NODE["Node Backend - Express"]
+    MW["Cross-cutting Middleware<br/>security headers, sanitize, CORS, rate limits"]
+    AUTH["Auth Routes<br/>login/session/identity"]
+    USERS["User Routes<br/>RBAC + user management"]
+    DATA["Data Routes<br/>products, logistics, analytics"]
+    ANOM["Anomaly Routes<br/>operational anomaly APIs"]
+    CHAT["Chat Routes<br/>message + stream + session lifecycle"]
+    MLGW["ML Routes Gateway<br/>forecast/anomaly proxy + batch endpoints"]
+    GEMSVC["Gemini Service<br/>model tiering + timeout handling"]
+    SCHED["Forecast Scheduler<br/>nightly orchestration"]
+    BATCH["Forecast Batch Service<br/>store-product batch execution"]
+    DBL["DB Layer<br/>query + persistence functions"]
   end
 
   FE --> MW
