@@ -6,33 +6,30 @@ This document provides detailed architecture visualizations for the PODS applica
 
 ```mermaid
 flowchart TB
-  %% ===== Clients =====
   U1[Store Manager]
   U2[Logistics Analyst]
   U3[Regional Admin]
   U4[System Admin]
-  B[Browser SPA]
+  B[Browser]
 
   U1 --> B
   U2 --> B
   U3 --> B
   U4 --> B
 
-  %% ===== Edge / Web =====
-  B --> NGINX[Nginx Reverse Proxy :80]
-  NGINX --> FE[React Frontend<br/>(Vite build served by Nginx)]
-  NGINX --> API[Node.js Express API :3001<br/>(/api/*)]
+  B --> NGINX[Nginx Proxy Port 80]
+  NGINX --> FE[React Frontend]
+  NGINX --> API[Node API Port 3001]
 
-  %% ===== Backend internals =====
-  subgraph BACKEND[Backend Service (TypeScript / Express)]
-    SEC[Security Middleware<br/>headers + sanitize]
-    CORS[CORS + Body Parser]
-    RL[Rate Limiters<br/>apiLimiter / mlLimiter / strictLimiter]
-    ROUTES[Routes<br/>/auth /chat /anomalies /data /users /ml]
-    CHAT[Gemini Service<br/>session chat + SSE stream]
-    MLGW[ML Gateway<br/>proxy to Python service]
-    BATCH[Nightly Forecast Scheduler<br/>+ manual batch trigger]
-    DBS[DB Access Layer]
+  subgraph BACKEND[Node Backend]
+    SEC[Security Middleware]
+    CORS[Body Parser and CORS]
+    RL[Rate Limiters]
+    ROUTES[API Routes]
+    CHAT[Gemini Chat Service]
+    MLGW[ML Gateway]
+    BATCH[Nightly Forecast Scheduler]
+    DBS[Database Layer]
   end
 
   API --> SEC --> CORS --> RL --> ROUTES
@@ -42,29 +39,26 @@ flowchart TB
   BATCH --> DBS
   BATCH --> MLGW
 
-  %% ===== External AI =====
-  CHAT --> GEMINI[Google Gemini API]
+  CHAT --> GEMINI[Google Gemini]
 
-  %% ===== ML service =====
-  subgraph MLSVC[Python FastAPI ML Service :5000]
-    MLR[ML Routes<br/>/health /info /anomalies/detect /forecast /batch-analysis]
-    AD[Isolation Forest<br/>Anomaly Detection]
-    FC[Exponential Smoothing<br/>Demand Forecasting]
+  subgraph MLSVC[Python ML Service]
+    MLR[ML Routes]
+    AD[Anomaly Detection]
+    FC[Demand Forecasting]
   end
 
   MLGW --> MLR
   MLR --> AD
   MLR --> FC
 
-  %% ===== Data layer =====
-  subgraph PG[PostgreSQL :5432]
+  subgraph PG[PostgreSQL]
     T1[(products)]
-    T2[(product_demand_history)]
-    T3[(product_demand_features)]
-    T4[(product_demand_forecast)]
+    T2[(demand_history)]
+    T3[(demand_features)]
+    T4[(demand_forecast)]
     T5[(ml_batch_job_runs)]
     T6[(forecast_review_decisions)]
-    T7[(freight_routes + freight_route_rates)]
+    T7[(freight_routes)]
     T8[(users)]
     T9[(audit_logs)]
   end
@@ -72,9 +66,8 @@ flowchart TB
   DBS --> PG
   MLSVC --> PG
 
-  %% ===== Ops =====
-  subgraph OPS[Docker Compose Runtime]
-    SEED[Seeder Job (optional profile)]
+  subgraph OPS[Docker Compose]
+    SEED[Seeder]
   end
   SEED --> PG
 ```
