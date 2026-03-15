@@ -2,7 +2,7 @@
 
 # PODS
 
-### 🧠 Predictive Order & Demand Solutions
+### 🧠 Predictive Order and Demand Solutions
 
 **The AI Co-Pilot for Supply Chain Operations**
 
