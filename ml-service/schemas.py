@@ -46,3 +46,8 @@ class ForecastResult(BaseModel):
     confidence_interval: List[float]
     trend: str
     explainability: List[str]
+    model_name: str
+
+    model_config = {
+        'protected_namespaces': (),
+    }

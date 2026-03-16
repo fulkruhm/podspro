@@ -256,5 +256,37 @@ export const openApiSpec = {
         },
       },
     },
+    '/audit/logs': {
+      get: {
+        summary: 'List audit logs (admin/sysadmin)',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '200': { description: 'Audit log list' },
+          '401': { description: 'Auth required' },
+          '403': { description: 'Insufficient permissions' },
+        },
+      },
+      post: {
+        summary: 'Create audit log event (admin/sysadmin)',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '201': { description: 'Audit log created' },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Auth required' },
+          '403': { description: 'Insufficient permissions' },
+        },
+      },
+    },
+    '/audit/export': {
+      get: {
+        summary: 'Export audit logs as CSV (admin/sysadmin)',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '200': { description: 'CSV file download' },
+          '401': { description: 'Auth required' },
+          '403': { description: 'Insufficient permissions' },
+        },
+      },
+    },
   },
 } as const;

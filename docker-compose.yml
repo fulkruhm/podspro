@@ -90,9 +90,18 @@ services:
       - "5001:5000"
     environment:
       - DATABASE_URL=postgresql://pods_user:pods_password@postgres:5432/pods_db
+      - MLFLOW_ENABLED=true
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_EXPERIMENT_NAME=pods-forecasting
+      - FORECAST_DEFAULT_METHOD=auto
+      - FORECAST_AB_TESTING_ENABLED=true
+      - FORECAST_AB_VARIANT_B_RATIO=0.30
+      - FORECAST_VARIANT_B_METHOD=arima
     depends_on:
       postgres:
         condition: service_healthy
+      mlflow:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -115,6 +124,16 @@ services:
       - backend
       - ml-service
 
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.17.2
+    container_name: pods-mlflow
+    command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000", "--backend-store-uri", "sqlite:///mlflow.db", "--default-artifact-root", "/mlflow/artifacts"]
+    ports:
+      - "5002:5000"
+    volumes:
+      - mlflow_data:/mlflow
+
 volumes:
   postgres_data:
   redis_data:
+  mlflow_data:

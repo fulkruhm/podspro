@@ -7,9 +7,6 @@ scikit-learn==1.5.0
 python-dateutil==2.8.2
 pytest==8.3.4
 httpx==0.24.1
-
-# Optional but recommended for future expansion:
-# tensorflow==2.15.0
-# torch==2.1.1
-# mlflow==2.9.1
-# optuna==3.15.0
+statsmodels==0.14.4
+prophet==1.1.5
+mlflow==2.17.2

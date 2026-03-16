@@ -83,6 +83,7 @@ export interface ForecastResult {
   confidence_interval: [number, number];
   trend: string;
   explainability?: string[];
+  model_name?: string;
 }
 
 export interface MLServiceHealth {
@@ -482,3 +483,4 @@ export async function retryForecastBatchRun(runId: number): Promise<ForecastBatc
 
   return await response.json();
 }
+

@@ -7,6 +7,7 @@ import { dataRouter } from './routes/dataRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
 import { authRouter } from './routes/authRoutes.js';
 import { mlRouter } from './routes/mlRoutes.js';
+import { auditRouter } from './routes/auditRoutes.js';
 import { startNightlyForecastScheduler } from './services/forecastBatchScheduler.js';
 import { securityHeaders, sanitizeInput } from './middleware/security.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
@@ -31,6 +32,7 @@ function mountApiRoutes(basePath: string) {
   app.use(`${basePath}/data`, dataRouter);
   app.use(`${basePath}/users`, userRouter);
   app.use(`${basePath}/ml`, mlRouter);
+  app.use(`${basePath}/audit`, auditRouter);
 }
 
 // Security middleware

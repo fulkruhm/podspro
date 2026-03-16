@@ -60,7 +60,7 @@ def register_routes(app: FastAPI, settings: AppSettings) -> None:
                 request.historical_demand,
                 request.historical_features,
                 request.future_features,
-                request.forecast_days
+                request.forecast_days,
             )
 
             return ForecastResult(
@@ -72,7 +72,8 @@ def register_routes(app: FastAPI, settings: AppSettings) -> None:
                     np.mean(confidence[1])
                 ],
                 trend=trend,
-                explainability=explainability
+                explainability=explainability,
+                model_name="exponential_smoothing",
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Forecast failed: {str(e)}")
@@ -101,7 +102,7 @@ def register_routes(app: FastAPI, settings: AppSettings) -> None:
                         forecast_req.historical_demand,
                         forecast_req.historical_features,
                         forecast_req.future_features,
-                        forecast_req.forecast_days
+                        forecast_req.forecast_days,
                     )
                     results["forecasts"].append({
                         "product_id": forecast_req.product_id,
@@ -109,7 +110,8 @@ def register_routes(app: FastAPI, settings: AppSettings) -> None:
                         "forecast": forecast_data,
                         "confidence_interval": confidence,
                         "trend": trend,
-                        "explainability": explainability
+                        "explainability": explainability,
+                        "model_name": "exponential_smoothing",
                     })
                 except Exception as e:
                     results["forecasts"].append({

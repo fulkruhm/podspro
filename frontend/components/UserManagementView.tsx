@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, Role, AuditLog } from '../types';
+import { exportAuditLogsCsv } from '../services/auditService';
 
 interface UserManagementViewProps {
   users: User[];
@@ -451,15 +452,14 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
             
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Showing last 500 entries</p>
-              <button 
-                onClick={() => {
-                  localStorage.removeItem('pods_audit_logs');
-                  window.location.reload();
-                }}
-                className="text-[10px] font-black text-red-600 uppercase tracking-widest hover:underline"
-              >
-                Purge Audit Trail
-              </button>
+                <button
+                  onClick={() => {
+                    void exportAuditLogsCsv({ limit: 1000 });
+                  }}
+                  className="text-[10px] font-black text-blue-700 uppercase tracking-widest hover:underline"
+                >
+                Export CSV
+                </button>
             </div>
           </div>
         </div>

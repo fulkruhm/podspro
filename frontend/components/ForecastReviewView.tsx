@@ -5,6 +5,7 @@ import {
   getForecastReviewItems,
   submitForecastReviewDecision,
   triggerForecastBatchRun,
+  getForecastBatchStatus,
   getForecastBatchQueueStats,
   getForecastBatchFailedJobs,
   retryForecastBatchRun,
@@ -27,6 +28,8 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
   filters,
   onRefreshData,
 }) => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const [items, setItems] = React.useState<ForecastReviewItem[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -130,7 +133,7 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
     setBatchRefreshing(true);
     setError(null);
     try {
-      await triggerForecastBatchRun(userRole, currentUserName, {
+      const trigger = await triggerForecastBatchRun(userRole, currentUserName, {
         history_days: 56,
         forecast_days: 14,
         min_history_points: 14,
@@ -142,9 +145,28 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
           status: filters.status || undefined,
         },
       });
+
+      const runId = Number(trigger.run_id);
+      const maxWaitMs = 120000;
+      const pollEveryMs = 3000;
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < maxWaitMs) {
+        const status = await getForecastBatchStatus(userRole);
+        const latestRun = status.latest_run;
+        const sameRun = latestRun && Number(latestRun.id) === runId;
+        const done = sameRun && latestRun.status !== 'running';
+
+        if (done) {
+          break;
+        }
+
+        await sleep(pollEveryMs);
+      }
+
       await loadItems();
       await loadQueueMonitoring();
-      Promise.resolve(onRefreshData?.()).catch((refreshError: any) => {
+      await Promise.resolve(onRefreshData?.()).catch((refreshError: any) => {
         console.error('Global refresh after forecast batch trigger failed:', refreshError?.message || refreshError);
       });
     } catch (err: any) {

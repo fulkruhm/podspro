@@ -266,3 +266,4 @@ class DemandForecaster:
             )
 
         return future_forecast, confidence, trend, explainability
+

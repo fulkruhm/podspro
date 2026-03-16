@@ -125,6 +125,21 @@ export const forecastBatchRetryBodySchema = z.object({
   run_id: z.number().int().min(1),
 }).strict();
 
+export const auditLogQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+  offset: z.coerce.number().int().min(0).max(50000).optional(),
+  category: z.enum(['security', 'provisioning', 'system', 'auth']).optional(),
+  severity: z.enum(['info', 'warning', 'critical']).optional(),
+  userId: z.string().min(1).max(255).optional(),
+});
+
+export const auditLogCreateBodySchema = z.object({
+  action: z.string().min(1).max(255),
+  details: z.string().max(5000).optional(),
+  category: z.enum(['security', 'provisioning', 'system', 'auth']),
+  severity: z.enum(['info', 'warning', 'critical']),
+}).strict();
+
 // Generic ID validation for path parameters
 export const entityIdParamSchema = z.object({
   id: z.string().min(1).max(255),

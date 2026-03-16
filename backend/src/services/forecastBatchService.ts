@@ -41,6 +41,9 @@ interface ForecastServiceResponse {
   confidence_interval?: [number, number];
   trend?: string;
   explainability?: string[];
+  model_name?: string;
+  model_variant?: string;
+  model_version?: string;
 }
 
 async function runStoreProductForecastBatch(
@@ -90,7 +93,9 @@ async function runStoreProductForecastBatch(
           forecast.forecast || [],
           forecast.confidence_interval,
           forecast.trend,
-          'exponential_smoothing',
+          forecast.model_name || 'exponential_smoothing',
+          forecast.model_variant,
+          forecast.model_version,
           item.historical_demand,
           forecast.explainability
         );

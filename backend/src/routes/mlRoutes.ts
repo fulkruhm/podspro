@@ -56,6 +56,9 @@ interface ForecastServiceResponse {
   confidence_interval?: [number, number];
   trend?: string;
   explainability?: string[];
+  model_name?: string;
+  model_variant?: string;
+  model_version?: string;
 }
 
 router.use(requireAuthenticatedUser);
@@ -179,7 +182,9 @@ router.post('/forecast', mlLimiter, validateRequestBody(mlForecastRequestSchema)
         forecast.forecast,
         forecast.confidence_interval,
         forecast.trend,
-        'exponential_smoothing',
+        forecast.model_name || 'exponential_smoothing',
+        forecast.model_variant,
+        forecast.model_version,
         historical_demand,
         forecast.explainability
       );

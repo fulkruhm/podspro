@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getAllUsers, getUserById, createUser, updateUser, deleteUser } from '../db.js';
+import { getAllUsers, getUserById, createUser, updateUser, deleteUser, createAuditLog } from '../db.js';
 import {
   validateRequestBody,
   validateRequestParams,
@@ -8,7 +8,7 @@ import {
   entityIdParamSchema,
 } from '../middleware/validation.js';
 import { strictLimiter } from '../middleware/rateLimiter.js';
-import { requireAnyRole } from '../middleware/authz.js';
+import { requireAnyRole, getIdentity } from '../middleware/authz.js';
 
 export const userRouter = Router();
 
@@ -73,6 +73,15 @@ userRouter.post(
   async (req: Request, res: Response) => {
     try {
       const user = await createUser(req.body);
+      const identity = getIdentity(res);
+      await createAuditLog({
+        userId: identity?.userId ?? null,
+        userName: identity?.name ?? null,
+        action: 'USER_CREATE',
+        details: `Created user @${user.username} (${user.role})`,
+        category: 'provisioning',
+        severity: 'info',
+      });
       // Don't send password or sensitive fields
       const { password, failed_login_attempts, is_locked, created_at, updated_at, ...safeUser } = user;
       res.status(201).json({ user: safeUser });
@@ -95,6 +104,15 @@ userRouter.put(
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
+      const identity = getIdentity(res);
+      await createAuditLog({
+        userId: identity?.userId ?? null,
+        userName: identity?.name ?? null,
+        action: 'USER_UPDATE',
+        details: `Updated user @${user.username}`,
+        category: 'system',
+        severity: 'info',
+      });
       // Don't send password or sensitive fields
       const { password, failed_login_attempts, is_locked, created_at, updated_at, ...safeUser } = user;
       res.json({ user: safeUser });
@@ -112,7 +130,17 @@ userRouter.delete(
   validateRequestParams(entityIdParamSchema),
   async (req: Request, res: Response) => {
     try {
+      const targetUser = await getUserById(req.params.id);
       await deleteUser(req.params.id);
+      const identity = getIdentity(res);
+      await createAuditLog({
+        userId: identity?.userId ?? null,
+        userName: identity?.name ?? null,
+        action: 'USER_DELETE',
+        details: `Deleted user @${targetUser?.username || req.params.id}`,
+        category: 'security',
+        severity: 'critical',
+      });
       res.json({ message: 'User deleted successfully' });
     } catch (error) {
       console.error('Error deleting user:', error);

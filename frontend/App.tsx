@@ -11,20 +11,17 @@ import ForecastReviewView from './components/ForecastReviewView';
 import Onboarding from './components/Onboarding';
 import FilterBar from './components/FilterBar';
 import LoginView from './components/LoginView';
-import { fetchRealtimeData } from './services/geminiService';
 import { fetchProducts, fetchRoutes } from './services/dataService';
 import { fetchUsers, updateUser as updateUserInDB } from './services/userService';
 import { setAuthSession, logoutSession } from './services/authSession';
+import { createAuditLogEvent, fetchAuditLogs } from './services/auditService';
 import { Product, FreightRoute, Filters, User, AuditLog } from './types';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [systemUsers, setSystemUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const saved = localStorage.getItem('pods_audit_logs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [pendingQuery, setPendingQuery] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -92,10 +89,30 @@ const App: React.FC = () => {
     loadData();
   }, [currentUser]);
 
-  // Persist audit logs whenever they change
   useEffect(() => {
-    localStorage.setItem('pods_audit_logs', JSON.stringify(auditLogs));
-  }, [auditLogs]);
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'sysadmin')) {
+      setAuditLogs([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadAuditLogs = async () => {
+      try {
+        const logs = await fetchAuditLogs({ limit: 500 });
+        if (!cancelled) {
+          setAuditLogs(logs);
+        }
+      } catch (error) {
+        console.error('Error loading audit logs:', error);
+      }
+    };
+
+    loadAuditLogs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
 
   // Multi-store filter state
   const [filters, setFilters] = useState<Filters>({
@@ -166,12 +183,26 @@ const App: React.FC = () => {
   };
 
   const addAuditLog = (log: Omit<AuditLog, 'id' | 'timestamp'>) => {
-    const newLog: AuditLog = {
-      ...log,
-      id: `log_${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: Date.now(),
-    };
-    setAuditLogs(prev => [newLog, ...prev].slice(0, 500)); // Keep last 500 logs
+    if (!currentUser) {
+      const localLog: AuditLog = {
+        ...log,
+        id: `local_${Math.random().toString(36).slice(2, 10)}`,
+        timestamp: Date.now(),
+      };
+      setAuditLogs((prev) => [localLog, ...prev].slice(0, 500));
+      return;
+    }
+
+    void createAuditLogEvent({
+      action: log.action,
+      details: log.details,
+      category: log.category,
+      severity: log.severity,
+    }).then((created) => {
+      setAuditLogs((prev) => [created, ...prev.filter((entry) => entry.id !== created.id)].slice(0, 500));
+    }).catch((error) => {
+      console.error('Failed to persist audit log:', error);
+    });
   };
 
   const filteredProducts = useMemo(() => {
@@ -200,13 +231,19 @@ const App: React.FC = () => {
 
   const handleRefreshData = async () => {
     setIsRefreshing(true);
-    const data = await fetchRealtimeData();
-    if (data) {
-      setProducts(data.products);
-      setRoutes(data.routes);
+    try {
+      const [productsData, routesData] = await Promise.all([
+        fetchProducts(),
+        fetchRoutes(),
+      ]);
+      setProducts(productsData);
+      setRoutes(routesData);
       setLastUpdated(Date.now());
+    } catch (error) {
+      console.error('Error refreshing data from database:', error);
+    } finally {
+      setIsRefreshing(false);
     }
-    setIsRefreshing(false);
   };
 
   const triggerAssistantQuery = (query: string) => {

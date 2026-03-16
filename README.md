@@ -366,6 +366,9 @@ GET   /api/ml/forecast/batch/failed-jobs    — Failed queue jobs for diagnostic
 POST  /api/ml/forecast/batch/retry          — Retry failed run by run_id (admin/sysadmin)
 GET   /api/ml/health            — ML service health check
 GET   /api/ml/info              — Service capabilities and model info
+GET   /api/audit/logs           — Query audit log dashboard data (admin/sysadmin)
+POST  /api/audit/logs           — Record structured audit event (admin/sysadmin)
+GET   /api/audit/export         — Export audit logs as CSV (admin/sysadmin)
 ```
 
 `POST /api/ml/forecast/batch/store-products` supports optional `Idempotency-Key` header for deduplicating repeated trigger requests.

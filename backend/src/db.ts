@@ -1,4 +1,5 @@
 import pkg from 'pg';
+import { randomUUID } from 'crypto';
 import { loadAppConfig } from './config/env.js';
 const { Pool } = pkg;
 
@@ -63,6 +64,16 @@ async function ensureForecastExplainabilityColumn() {
   await pool.query(`
     ALTER TABLE IF EXISTS product_demand_forecast
     ADD COLUMN IF NOT EXISTS explainability_text TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE IF EXISTS product_demand_forecast
+    ADD COLUMN IF NOT EXISTS model_variant VARCHAR(32)
+  `);
+
+  await pool.query(`
+    ALTER TABLE IF EXISTS product_demand_forecast
+    ADD COLUMN IF NOT EXISTS model_version VARCHAR(64)
   `);
 }
 
@@ -136,6 +147,30 @@ async function ensureAuthTokenTables() {
   );
 }
 
+async function ensureAuditLogTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id VARCHAR(255) PRIMARY KEY,
+      timestamp BIGINT NOT NULL,
+      user_id VARCHAR(255),
+      user_name VARCHAR(255),
+      action VARCHAR(255) NOT NULL,
+      details TEXT,
+      category VARCHAR(50) NOT NULL,
+      severity VARCHAR(50) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)'
+  );
+
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC)'
+  );
+}
+
 // Initialize database connection on startup
 async function initializeDatabase() {
   try {
@@ -145,6 +180,7 @@ async function initializeDatabase() {
     await ensureDemandFeatureTable();
     await ensureForecastReviewDecisionTable();
     await ensureAuthTokenTables();
+    await ensureAuditLogTable();
     databaseInitialized = true;
   } catch (err) {
     databaseInitialized = false;
@@ -754,6 +790,8 @@ export async function saveStoreProductForecast(
   confidenceInterval?: [number, number],
   trend?: string,
   modelName = 'exponential_smoothing',
+  modelVariant?: string,
+  modelVersion?: string,
   historicalDemand?: number[],
   explainabilityByDay?: string[]
 ) {
@@ -792,6 +830,8 @@ export async function saveStoreProductForecast(
           trend,
           explainability_text,
           model_name,
+          model_variant,
+          model_version,
           generated_at
         )
         VALUES (
@@ -804,6 +844,8 @@ export async function saveStoreProductForecast(
           $7,
           $8,
           $9,
+          $10,
+          $11,
           NOW()
         )
       `, [
@@ -816,6 +858,8 @@ export async function saveStoreProductForecast(
         trend ?? null,
         explainabilityText,
         modelName,
+        modelVariant ?? null,
+        modelVersion ?? null,
       ]);
     }
 
@@ -1012,4 +1056,160 @@ export async function cleanupExpiredAuthTokens() {
 
 export async function closePool() {
   await pool.end();
+}
+
+export interface ForecastAbMetricsRecord {
+  model_name: string;
+  model_variant: string;
+  model_version: string | null;
+  compared_points: number;
+  mae: number;
+  rmse: number;
+  mape_pct: number;
+  avg_forecast: number;
+  avg_actual: number;
+}
+
+export async function getForecastAbPerformanceMetrics(days = 30): Promise<ForecastAbMetricsRecord[]> {
+  const safeDays = Number.isFinite(days) ? Math.max(1, Math.min(180, Math.floor(days))) : 30;
+
+  const result = await pool.query(
+    `
+      WITH joined AS (
+        SELECT
+          COALESCE(NULLIF(TRIM(f.model_name), ''), 'unknown') AS model_name,
+          COALESCE(NULLIF(TRIM(f.model_variant), ''), 'A') AS model_variant,
+          NULLIF(TRIM(f.model_version), '') AS model_version,
+          f.forecast_qty::DECIMAL(12,4) AS forecast_qty,
+          h.demand_qty::DECIMAL(12,4) AS actual_qty
+        FROM product_demand_forecast f
+        INNER JOIN product_demand_history h
+          ON h.product_id = f.product_id
+          AND h.store_id = f.store_id
+          AND h.demand_date = f.forecast_date
+        WHERE f.forecast_date >= CURRENT_DATE - ($1 * INTERVAL '1 day')
+          AND f.forecast_date <= CURRENT_DATE
+      )
+      SELECT
+        model_name,
+        model_variant,
+        model_version,
+        COUNT(*)::INT AS compared_points,
+        ROUND(AVG(ABS(forecast_qty - actual_qty))::NUMERIC, 4) AS mae,
+        ROUND(SQRT(AVG(POWER((forecast_qty - actual_qty), 2)))::NUMERIC, 4) AS rmse,
+        ROUND(
+          AVG(
+            CASE
+              WHEN actual_qty > 0 THEN ABS((forecast_qty - actual_qty) / actual_qty) * 100
+              ELSE NULL
+            END
+          )::NUMERIC,
+          4
+        ) AS mape_pct,
+        ROUND(AVG(forecast_qty)::NUMERIC, 4) AS avg_forecast,
+        ROUND(AVG(actual_qty)::NUMERIC, 4) AS avg_actual
+      FROM joined
+      GROUP BY model_name, model_variant, model_version
+      ORDER BY model_variant ASC, mae ASC
+    `,
+    [safeDays]
+  );
+
+  return result.rows as ForecastAbMetricsRecord[];
+}
+
+export type AuditLogCategory = 'security' | 'provisioning' | 'system' | 'auth';
+export type AuditLogSeverity = 'info' | 'warning' | 'critical';
+
+export interface AuditLogRecord {
+  id: string;
+  timestamp: number;
+  user_id: string | null;
+  user_name: string | null;
+  action: string;
+  details: string | null;
+  category: AuditLogCategory;
+  severity: AuditLogSeverity;
+}
+
+export async function createAuditLog(input: {
+  userId?: string | null;
+  userName?: string | null;
+  action: string;
+  details?: string | null;
+  category: AuditLogCategory;
+  severity: AuditLogSeverity;
+}) {
+  const id = `audit_${randomUUID()}`;
+  const timestamp = Date.now();
+
+  const result = await pool.query(
+    `
+      INSERT INTO audit_logs (id, timestamp, user_id, user_name, action, details, category, severity)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, timestamp, user_id, user_name, action, details, category, severity
+    `,
+    [
+      id,
+      timestamp,
+      input.userId ?? null,
+      input.userName ?? null,
+      input.action,
+      input.details ?? null,
+      input.category,
+      input.severity,
+    ]
+  );
+
+  return result.rows[0] as AuditLogRecord;
+}
+
+export async function getAuditLogs(options: {
+  limit?: number;
+  offset?: number;
+  category?: AuditLogCategory;
+  severity?: AuditLogSeverity;
+  userId?: string;
+}) {
+  const limit = Number.isFinite(options.limit) ? Math.max(1, Math.min(1000, Math.floor(options.limit!))) : 200;
+  const offset = Number.isFinite(options.offset) ? Math.max(0, Math.floor(options.offset!)) : 0;
+
+  const whereClauses: string[] = [];
+  const params: Array<string | number> = [];
+
+  if (options.category) {
+    params.push(options.category);
+    whereClauses.push(`category = $${params.length}`);
+  }
+
+  if (options.severity) {
+    params.push(options.severity);
+    whereClauses.push(`severity = $${params.length}`);
+  }
+
+  if (options.userId) {
+    params.push(options.userId);
+    whereClauses.push(`user_id = $${params.length}`);
+  }
+
+  params.push(limit);
+  const limitParam = `$${params.length}`;
+  params.push(offset);
+  const offsetParam = `$${params.length}`;
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  const result = await pool.query(
+    `
+      SELECT id, timestamp, user_id, user_name, action, details, category, severity
+      FROM audit_logs
+      ${whereSql}
+      ORDER BY timestamp DESC
+      LIMIT ${limitParam}
+      OFFSET ${offsetParam}
+    `,
+    params
+  );
+
+  return result.rows as AuditLogRecord[];
 }
