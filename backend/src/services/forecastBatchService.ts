@@ -5,6 +5,7 @@ import {
   createBatchJobRun,
   completeBatchJobRun,
   failBatchJobRun,
+  createAuditLog,
 } from '../db.js';
 import { loadAppConfig } from '../config/env.js';
 
@@ -136,6 +137,22 @@ async function runStoreProductForecastBatch(
       },
     });
 
+    await createAuditLog({
+      userId: null,
+      userName: options.triggeredBy ?? null,
+      action: 'FORECAST_BATCH_COMPLETED',
+      details: JSON.stringify({
+        run_id: runId,
+        status: failed > 0 ? 'partial_success' : 'success',
+        total_store_products: totalStoreProducts,
+        succeeded,
+        failed,
+        filters: options.filters,
+      }),
+      category: 'system',
+      severity: failed > 0 ? 'warning' : 'info',
+    });
+
     return {
       totalStoreProducts,
       succeeded,
@@ -145,6 +162,20 @@ async function runStoreProductForecastBatch(
     };
   } catch (error: unknown) {
     await failBatchJobRun(runId, toErrorMessage(error));
+
+    await createAuditLog({
+      userId: null,
+      userName: options.triggeredBy ?? null,
+      action: 'FORECAST_BATCH_FAILED',
+      details: JSON.stringify({
+        run_id: runId,
+        error: toErrorMessage(error),
+        filters: options.filters,
+      }),
+      category: 'system',
+      severity: 'critical',
+    });
+
     throw error;
   }
 }

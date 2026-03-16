@@ -3,13 +3,17 @@ import React from 'react';
 import { FreightRoute } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-interface LogisticsViewProps {
+interface LogisticsCommandViewProps {
   triggerQuery: (query: string) => void;
   routes: FreightRoute[];
   onClose: () => void;
 }
 
-const LogisticsView: React.FC<LogisticsViewProps> = ({ triggerQuery, routes, onClose }) => {
+const LogisticsCommandView: React.FC<LogisticsCommandViewProps> = ({
+  triggerQuery,
+  routes,
+  onClose,
+}) => {
   const [selectedRouteId, setSelectedRouteId] = React.useState<string>(routes[0]?.id || '');
   const [filters, setFilters] = React.useState({
     origin: '',
@@ -330,4 +334,4 @@ const LogisticsView: React.FC<LogisticsViewProps> = ({ triggerQuery, routes, onC
   );
 };
 
-export default LogisticsView;
+export default LogisticsCommandView;

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Product } from '../types';
+import { Product, AuditLog } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { detectInventoryAnomalies, InventoryAnomaly } from '../services/anomalyService';
 import ProductDetailView from './ProductDetailView';
@@ -11,9 +11,17 @@ interface InventoryViewProps {
   isLoadingData: boolean;
   onClose: () => void;
   onUpdateProduct: (productId: string, updates: Partial<Product>) => void;
+  addAuditLog: (log: Omit<AuditLog, 'id' | 'timestamp'>) => void;
 }
 
-const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, isLoadingData, onClose, onUpdateProduct }) => {
+const InventoryIntelligenceView: React.FC<InventoryViewProps> = ({
+  triggerQuery,
+  products,
+  isLoadingData,
+  onClose,
+  onUpdateProduct,
+  addAuditLog,
+}) => {
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<Product['status'] | 'all'>('all');
   const [anomalies, setAnomalies] = React.useState<InventoryAnomaly[]>([]);
@@ -36,11 +44,36 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, i
     try {
       const detected = await detectInventoryAnomalies(products);
       setAnomalies(detected);
+      addAuditLog({
+        userId: '',
+        userName: '',
+        action: 'INVENTORY_AI_SCAN',
+        details: `Ran inventory anomaly scan across ${products.length} products; detected ${detected.length} anomalies`,
+        category: 'system',
+        severity: 'info',
+      });
     } catch (error) {
       console.error(error);
     } finally {
       setIsDetecting(false);
     }
+  };
+
+  const openProductDetail = (product: Product, source: string) => {
+    setSelectedProduct(product);
+    addAuditLog({
+      userId: '',
+      userName: '',
+      action: 'PRODUCT_DETAIL_OPEN',
+      details: `Opened product detail from ${source}`,
+      category: 'system',
+      severity: 'info',
+      productId: product.id,
+      productName: product.name,
+      region: product.region,
+      store: product.store,
+      department: product.department,
+    });
   };
 
   React.useEffect(() => {
@@ -302,7 +335,7 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, i
                   key={idx} 
                   onClick={() => {
                     const product = products.find(p => p.id === anomaly.productId);
-                    if (product) setSelectedProduct(product);
+                    if (product) openProductDetail(product, 'anomaly-card');
                   }}
                   className="bg-indigo-800/50 backdrop-blur-sm border border-indigo-500/30 p-4 rounded-xl hover:bg-indigo-800 transition cursor-pointer group"
                 >
@@ -457,7 +490,7 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, i
             return (
               <div 
                 key={product.id} 
-                onClick={() => setSelectedProduct(product)}
+                onClick={() => openProductDetail(product, 'mobile-card')}
                 className={`w-64 flex-shrink-0 bg-white p-5 rounded-2xl border transition-all ${
                   selectedProduct?.id === product.id ? 'border-blue-500 ring-1 ring-blue-500 shadow-lg' : 'border-slate-200'
                 }`}
@@ -485,6 +518,19 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, i
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
+                    addAuditLog({
+                      userId: '',
+                      userName: '',
+                      action: 'INVENTORY_OPTIMIZE_QUERY',
+                      details: `Requested optimization for ${product.name} at ${product.store}`,
+                      category: 'system',
+                      severity: 'info',
+                      productId: product.id,
+                      productName: product.name,
+                      region: product.region,
+                      store: product.store,
+                      department: product.department,
+                    });
                     triggerQuery(`Optimize inventory levels for ${product.name} at ${product.store} based on the 7-day demand forecast of ${totalForecast} units.`);
                   }}
                   className="w-full py-2.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-black transition active:scale-95"
@@ -517,7 +563,7 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, i
                 const isAtRisk = totalForecast > product.currentStock;
 
                 return (
-                  <tr key={product.id} className={`hover:bg-slate-50 transition cursor-pointer ${selectedProduct?.id === product.id ? 'bg-blue-50' : ''}`} onClick={() => setSelectedProduct(product)}>
+                  <tr key={product.id} className={`hover:bg-slate-50 transition cursor-pointer ${selectedProduct?.id === product.id ? 'bg-blue-50' : ''}`} onClick={() => openProductDetail(product, 'desktop-table')}>
                     <td className="px-4 md:px-6 py-3 md:py-4">
                       <div className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{product.name}</div>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -545,6 +591,19 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, i
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
+                          addAuditLog({
+                            userId: '',
+                            userName: '',
+                            action: 'INVENTORY_OPTIMIZE_QUERY',
+                            details: `Requested optimization for ${product.name} at ${product.store}`,
+                            category: 'system',
+                            severity: 'info',
+                            productId: product.id,
+                            productName: product.name,
+                            region: product.region,
+                            store: product.store,
+                            department: product.department,
+                          });
                           triggerQuery(`Optimize inventory levels for ${product.name} at ${product.store} based on the 7-day demand forecast of ${totalForecast} units.`);
                         }}
                         className="text-blue-600 hover:text-blue-800 font-medium text-xs md:text-sm"
@@ -563,4 +622,4 @@ const InventoryView: React.FC<InventoryViewProps> = ({ triggerQuery, products, i
   );
 };
 
-export default InventoryView;
+export default InventoryIntelligenceView;

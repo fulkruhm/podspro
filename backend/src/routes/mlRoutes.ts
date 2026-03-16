@@ -28,6 +28,8 @@ import {
   saveStoreProductForecast,
   getForecastReviewItems,
   createForecastReviewDecision,
+  createAuditLog,
+  getProductById,
 } from '../db.js';
 import { STORE_PRODUCT_FORECAST_JOB_TYPE } from '../services/forecastBatchService.js';
 import {
@@ -288,6 +290,23 @@ router.post(
         idempotencyKey: idempotencyHeader,
       });
 
+      await createAuditLog({
+        userId: identity?.userId ?? null,
+        userName: identity?.name ?? triggeredBy,
+        action: 'FORECAST_BATCH_TRIGGER',
+        details: JSON.stringify({
+          run_id: runId,
+          queued,
+          duplicate,
+          history_days: historyDays,
+          forecast_days: forecastDays,
+          min_history_points: minHistoryPoints,
+          filters,
+        }),
+        category: 'system',
+        severity: duplicate ? 'warning' : 'info',
+      });
+
       if (execution) {
         execution.catch((executionError: unknown) => {
           console.error(
@@ -479,6 +498,33 @@ router.post(
           decisionStatus === 'adjust_baseline' ? (normalizedBaselineAdjustment ?? 0) : null,
         notes: typeof notes === 'string' ? notes : undefined,
         decidedBy,
+      });
+
+      const product = await getProductById(productId);
+      const severity =
+        decisionStatus === 'flag_data_issue' || decisionStatus === 'request_override'
+          ? 'warning'
+          : 'info';
+      const detailParts = [
+        `Decision ${decisionStatus} for product ${productId} at store ${storeId}`,
+        typeof normalizedBaselineAdjustment === 'number'
+          ? `baseline_adjustment_pct=${normalizedBaselineAdjustment}`
+          : null,
+        typeof notes === 'string' && notes.trim().length > 0 ? `notes=${notes.trim()}` : null,
+      ].filter(Boolean);
+
+      await createAuditLog({
+        userId: identity?.userId ?? null,
+        userName: identity?.name ?? null,
+        action: 'FORECAST_REVIEW_DECISION',
+        details: detailParts.join(' | '),
+        category: 'system',
+        severity,
+        productId: product?.id ?? productId,
+        productName: product?.name ?? null,
+        region: product?.region ?? null,
+        store: product?.store ?? storeId,
+        department: product?.department ?? null,
       });
 
       return res.json({ decision });

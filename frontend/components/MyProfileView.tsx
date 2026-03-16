@@ -2,13 +2,13 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 
-interface ProfileViewProps {
+interface MyProfileViewProps {
   user: User;
   onUpdate: (updates: Partial<User>) => void;
   onClose: () => void;
 }
 
-const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate, onClose }) => {
+const MyProfileView: React.FC<MyProfileViewProps> = ({ user, onUpdate, onClose }) => {
   const [formData, setFormData] = useState({
     name: user.name,
     email: user.email || '',
@@ -186,4 +186,4 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdate, onClose }) =>
   );
 };
 
-export default ProfileView;
+export default MyProfileView;

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { createAuditLog, getAuditLogs, AuditLogCategory, AuditLogSeverity } from '../db.js';
-import { requireAnyRole, getIdentity } from '../middleware/authz.js';
+import { requireAnyRole, requireAuthenticatedUser, getIdentity } from '../middleware/authz.js';
 import {
   validateRequestBody,
   validateRequestQuery,
@@ -18,10 +18,9 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-auditRouter.use(requireAnyRole(['admin', 'sysadmin']));
-
 auditRouter.get(
   '/logs',
+  requireAnyRole(['admin', 'sysadmin']),
   validateRequestQuery(auditLogQuerySchema),
   async (req: Request, res: Response) => {
     try {
@@ -31,6 +30,12 @@ auditRouter.get(
         category: req.query.category as AuditLogCategory | undefined,
         severity: req.query.severity as AuditLogSeverity | undefined,
         userId: req.query.userId as string | undefined,
+        region: req.query.region as string | undefined,
+        store: req.query.store as string | undefined,
+        department: req.query.department as string | undefined,
+        productId: req.query.productId as string | undefined,
+        from: req.query.from ? Number(req.query.from) : undefined,
+        to: req.query.to ? Number(req.query.to) : undefined,
       });
 
       res.json({ logs });
@@ -43,6 +48,7 @@ auditRouter.get(
 
 auditRouter.post(
   '/logs',
+  requireAuthenticatedUser,
   validateRequestBody(auditLogCreateBodySchema),
   async (req: Request, res: Response) => {
     try {
@@ -54,6 +60,11 @@ auditRouter.post(
         details: req.body.details,
         category: req.body.category,
         severity: req.body.severity,
+        productId: req.body.productId,
+        productName: req.body.productName,
+        region: req.body.region,
+        store: req.body.store,
+        department: req.body.department,
       });
 
       res.status(201).json({ log: created });
@@ -66,6 +77,7 @@ auditRouter.post(
 
 auditRouter.get(
   '/export',
+  requireAnyRole(['admin', 'sysadmin']),
   validateRequestQuery(auditLogQuerySchema),
   async (req: Request, res: Response) => {
     try {
@@ -75,9 +87,16 @@ auditRouter.get(
         category: req.query.category as AuditLogCategory | undefined,
         severity: req.query.severity as AuditLogSeverity | undefined,
         userId: req.query.userId as string | undefined,
+        region: req.query.region as string | undefined,
+        store: req.query.store as string | undefined,
+        department: req.query.department as string | undefined,
+        productId: req.query.productId as string | undefined,
+        from: req.query.from ? Number(req.query.from) : undefined,
+        to: req.query.to ? Number(req.query.to) : undefined,
       });
 
-      const header = 'id,timestamp,user_id,user_name,action,details,category,severity';
+      const header =
+        'id,timestamp,user_id,user_name,action,details,category,severity,product_id,product_name,region,store,department';
       const rows = logs.map((log) =>
         [
           log.id,
@@ -88,6 +107,11 @@ auditRouter.get(
           (log.details ?? '').replace(/"/g, '""'),
           log.category,
           log.severity,
+          log.product_id ?? '',
+          log.product_name ?? '',
+          log.region ?? '',
+          log.store ?? '',
+          log.department ?? '',
         ]
           .map((value, index) => {
             const needsQuote =

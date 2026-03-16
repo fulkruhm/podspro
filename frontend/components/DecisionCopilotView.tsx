@@ -1,15 +1,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { sendMessage, sendMessageStream, startChat } from '../services/geminiService';
+import { createAuditLogEvent } from '../services/auditService';
 import { ChatMessage } from '../types';
 
-interface AssistantViewProps {
+interface DecisionCopilotViewProps {
   initialQuery?: string | null;
   clearInitialQuery: () => void;
   onClose: () => void;
 }
 
-const AssistantView: React.FC<AssistantViewProps> = ({ initialQuery, clearInitialQuery, onClose }) => {
+const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
+  initialQuery,
+  clearInitialQuery,
+  onClose,
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'model', content: "Hello! I'm the PODS AI Assistant. How can I help you optimize your supply chain today? I can analyze your inventory, predict freight rates, or help with multi-SKU optimization.", timestamp: Date.now() }
   ]);
@@ -23,6 +28,13 @@ const AssistantView: React.FC<AssistantViewProps> = ({ initialQuery, clearInitia
   const handleSend = async (customMessage?: string) => {
     const textToSend = customMessage || input;
     if (!textToSend.trim() || !chatSessionRef.current || isLoading) return;
+
+    void createAuditLogEvent({
+      action: 'ASSISTANT_MESSAGE_SEND',
+      details: `Submitted assistant prompt: ${textToSend.slice(0, 240)}`,
+      category: 'system',
+      severity: 'info',
+    });
 
     const userMessage: ChatMessage = { role: 'user', content: textToSend, timestamp: Date.now() };
     const aiMessageTimestamp = Date.now() + Math.random();
@@ -55,15 +67,15 @@ const AssistantView: React.FC<AssistantViewProps> = ({ initialQuery, clearInitia
   useEffect(() => {
     const initChat = async () => {
       try {
-        console.log('[AssistantView] Initializing chat, initialQuery:', initialQuery);
+        console.log('[DecisionCopilotView] Initializing chat, initialQuery:', initialQuery);
         const sessionId = await startChat();
         chatSessionRef.current = sessionId;
-        console.log('[AssistantView] Chat initialized with sessionId:', sessionId);
+        console.log('[DecisionCopilotView] Chat initialized with sessionId:', sessionId);
         setChatInitialized(true);
         
         // If there's an initial query and we haven't processed it yet, send it now
         if (initialQuery && !hasProcessedQuery.current) {
-          console.log('[AssistantView] Sending initial query:', initialQuery);
+          console.log('[DecisionCopilotView] Sending initial query:', initialQuery);
           hasProcessedQuery.current = true;
           // Small delay to ensure the state update completes
           setTimeout(() => {
@@ -185,4 +197,4 @@ const AssistantView: React.FC<AssistantViewProps> = ({ initialQuery, clearInitia
   );
 };
 
-export default AssistantView;
+export default DecisionCopilotView;

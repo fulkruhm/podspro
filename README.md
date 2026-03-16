@@ -83,11 +83,11 @@ PODS is built to become the **AI operating system for physical operations** — 
 
 <div align="center">
 
-**Dashboard — Executive Portfolio Command**
+**Command Center — Executive Portfolio Command**
 ![Dashboard](assets/dashboard.png)
 
-**AI Advisor — Natural Language Operational Intelligence**
-![AI Advisor](assets/ai_advisor.png)
+**Decision Copilot — Natural Language Operational Intelligence**
+![Decision Copilot](assets/ai_advisor.png)
 
 **Secure Login — Node Authorization**
 ![Login](assets/login.png)
@@ -118,7 +118,7 @@ Recommended Actions:
 1. **Logistics delay detected** — Shipment on route TX-3 falls behind schedule
 2. **ML service flags anomaly** — Isolation Forest identifies abnormal inventory depletion at Store 14
 3. **AI explains root cause** — Gemini correlates the delay with a 27% demand spike in beverages
-4. **Operator accepts recommendation** — Reorder suggestion surfaced in plain language via the AI Advisor
+4. **Operator accepts recommendation** — Reorder suggestion surfaced in plain language via the Decision Copilot
 5. **Inventory rebalanced** — Excess stock reallocated from Store 09, stockout avoided
 
 ---
@@ -178,7 +178,7 @@ React Frontend
 Node.js Backend (Port 3001)          Python ML Service (Port 5000)
 ┌─────────────────────────┐          ┌──────────────────────────┐
 │  • Authentication        │          │  • Anomaly Detection     │
-│  • User Management       │ ───────▶ │  • Demand Forecasting    │
+│  • Identity & Access     │ ───────▶ │  • Demand Forecasting    │
 │  • Data APIs             │          │  • scikit-learn Models   │
 │  • Gemini AI Chat        │          └──────────────────────────┘
 └─────────────────────────┘
@@ -238,6 +238,8 @@ FORECAST_BATCH_QUEUE_BACKOFF_MS=5000
 FORECAST_BATCH_QUEUE_CONCURRENCY=1
 FORECAST_BATCH_HOUR=2
 FORECAST_BATCH_MINUTE=0
+AUDIT_LOG_RETENTION_DAYS=30
+AUDIT_LOG_PURGE_INTERVAL_MINUTES=60
 ```
 
 **ML Service `.env`**
@@ -288,6 +290,8 @@ Configuration is maintained in a single source per runtime:
 | `FORECAST_BATCH_HOUR` | `2` | `backend/src/config/env.ts` | Scheduler UTC hour |
 | `FORECAST_BATCH_MINUTE` | `0` | `backend/src/config/env.ts` | Scheduler UTC minute |
 | `BATCH_RUN_STALE_MINUTES` | `45` | `backend/src/config/env.ts` | Running batch stale timeout |
+| `AUDIT_LOG_RETENTION_DAYS` | `30` | `backend/src/config/env.ts` | Retain audit rows for N days before purge |
+| `AUDIT_LOG_PURGE_INTERVAL_MINUTES` | `60` | `backend/src/config/env.ts` | How often retention purge runs |
 | `ML_ANOMALY_CACHE_TTL_SECONDS` | `120` | `backend/src/config/env.ts` | Anomaly response cache TTL |
 | `ML_FORECAST_CACHE_TTL_SECONDS` | `300` | `backend/src/config/env.ts` | Forecast response cache TTL |
 | `ML_INFO_CACHE_TTL_SECONDS` | `600` | `backend/src/config/env.ts` | ML info response cache TTL |
@@ -357,10 +361,10 @@ GET   /health                 — ML service liveness endpoint
 GET   /ready                  — ML service readiness endpoint
 ```
 
-**AI Advisor**
+**Decision Copilot**
 ```
 POST  /api/chat/start         — Initiate AI conversation session
-POST  /api/chat/message       — Send message to AI advisor
+POST  /api/chat/message       — Send message to Decision Copilot
 GET   /api/chat/realtime-data — Fetch live inventory & logistics data
 ```
 
@@ -374,8 +378,8 @@ GET   /api/ml/forecast/batch/failed-jobs    — Failed queue jobs for diagnostic
 POST  /api/ml/forecast/batch/retry          — Retry failed run by run_id (admin/sysadmin)
 GET   /api/ml/health            — ML service health check
 GET   /api/ml/info              — Service capabilities and model info
-GET   /api/audit/logs           — Query audit log dashboard data (admin/sysadmin)
-POST  /api/audit/logs           — Record structured audit event (admin/sysadmin)
+GET   /api/audit/logs           — Query Action Intelligence data (admin/sysadmin)
+POST  /api/audit/logs           — Record structured audit event (authenticated user)
 GET   /api/audit/export         — Export audit logs as CSV (admin/sysadmin)
 ```
 
@@ -396,7 +400,7 @@ Authorization: Bearer <signed_token_from_/api/auth/login>
 
 Sensitive endpoints (for example `/api/users/*` and ML forecast batch/review endpoints) now reject missing, invalid, expired, or unauthorized tokens with `401/403`.
 
-**User Management** *(Admin only)*
+**Identity & Access** *(Sysadmin only)*
 ```
 GET    /api/users           — List users with store assignments
 POST   /api/users           — Provision new user
@@ -490,9 +494,10 @@ This executes linting, backend API contract tests, and ML-service tests (local `
 - [x] Python ML microservice (FastAPI + scikit-learn)
 - [x] Hybrid Node.js + Python architecture
 - [x] Core inventory and logistics management
+- [x] Action Intelligence panel with filtered audit export
 
 **In Progress**
-- [ ] Audit log dashboard and export
+- None
 
 **Upcoming**
 - [ ] Autonomous reorder engine with anomaly-triggered alerts

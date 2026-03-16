@@ -19,6 +19,8 @@ export interface AppConfig {
   mlAnomalyCacheTtlSeconds: number;
   mlForecastCacheTtlSeconds: number;
   mlInfoCacheTtlSeconds: number;
+  auditLogRetentionDays: number;
+  auditLogPurgeIntervalMinutes: number;
   aiResponseTimeoutMs?: number;
   geminiApiKey?: string;
   geminiFastModel: string;
@@ -49,6 +51,8 @@ const DEFAULT_BATCH_RUN_STALE_MINUTES = 45;
 const DEFAULT_ML_ANOMALY_CACHE_TTL_SECONDS = 120;
 const DEFAULT_ML_FORECAST_CACHE_TTL_SECONDS = 300;
 const DEFAULT_ML_INFO_CACHE_TTL_SECONDS = 600;
+const DEFAULT_AUDIT_LOG_RETENTION_DAYS = 30;
+const DEFAULT_AUDIT_LOG_PURGE_INTERVAL_MINUTES = 60;
 const DEFAULT_GEMINI_FAST_MODEL = 'gemini-3.1-pro-preview';
 const DEFAULT_GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
 const DEFAULT_GEMINI_ANOMALY_MODEL = 'gemini-3-flash-preview';
@@ -245,6 +249,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   let mlAnomalyCacheTtlSeconds = DEFAULT_ML_ANOMALY_CACHE_TTL_SECONDS;
   let mlForecastCacheTtlSeconds = DEFAULT_ML_FORECAST_CACHE_TTL_SECONDS;
   let mlInfoCacheTtlSeconds = DEFAULT_ML_INFO_CACHE_TTL_SECONDS;
+  let auditLogRetentionDays = DEFAULT_AUDIT_LOG_RETENTION_DAYS;
+  let auditLogPurgeIntervalMinutes = DEFAULT_AUDIT_LOG_PURGE_INTERVAL_MINUTES;
   let aiResponseTimeoutMs: number | undefined;
   let geminiFastModel = DEFAULT_GEMINI_FAST_MODEL;
   let geminiProModel = DEFAULT_GEMINI_PRO_MODEL;
@@ -401,6 +407,30 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   try {
+    auditLogRetentionDays = parsePositiveInteger(
+      env.AUDIT_LOG_RETENTION_DAYS,
+      DEFAULT_AUDIT_LOG_RETENTION_DAYS,
+      'AUDIT_LOG_RETENTION_DAYS',
+      1,
+      3650
+    );
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
+  }
+
+  try {
+    auditLogPurgeIntervalMinutes = parsePositiveInteger(
+      env.AUDIT_LOG_PURGE_INTERVAL_MINUTES,
+      DEFAULT_AUDIT_LOG_PURGE_INTERVAL_MINUTES,
+      'AUDIT_LOG_PURGE_INTERVAL_MINUTES',
+      1,
+      1440
+    );
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
+  }
+
+  try {
     aiResponseTimeoutMs = parseOptionalTimeoutMs(env.AI_RESPONSE_TIMEOUT_MS);
   } catch (error: unknown) {
     errors.push(getErrorMessage(error));
@@ -435,6 +465,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mlAnomalyCacheTtlSeconds,
     mlForecastCacheTtlSeconds,
     mlInfoCacheTtlSeconds,
+    auditLogRetentionDays,
+    auditLogPurgeIntervalMinutes,
     aiResponseTimeoutMs,
     geminiApiKey,
     geminiFastModel,

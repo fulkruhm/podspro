@@ -20,7 +20,7 @@ Operational checks and incident-first actions for PODS services.
 
 ## Data Refresh Behavior
 
-- Forecast Review refresh now waits for batch completion before global data refresh.
+- Forecast Governance refresh now waits for batch completion before global data refresh.
 - Product graph data is reloaded from backend data endpoints, not chat realtime endpoint.
 
 ## Security Checks

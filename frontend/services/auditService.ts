@@ -8,6 +8,12 @@ interface FetchAuditLogsOptions {
   category?: AuditLog['category'];
   severity?: AuditLog['severity'];
   userId?: string;
+  region?: string;
+  store?: string;
+  department?: string;
+  productId?: string;
+  from?: number;
+  to?: number;
 }
 
 interface AuditLogApiRow {
@@ -19,6 +25,11 @@ interface AuditLogApiRow {
   details?: string;
   category: AuditLog['category'];
   severity: AuditLog['severity'];
+  product_id?: string;
+  product_name?: string;
+  region?: string;
+  store?: string;
+  department?: string;
 }
 
 function toQueryString(options: FetchAuditLogsOptions = {}) {
@@ -28,6 +39,12 @@ function toQueryString(options: FetchAuditLogsOptions = {}) {
   if (options.category) params.set('category', options.category);
   if (options.severity) params.set('severity', options.severity);
   if (options.userId) params.set('userId', options.userId);
+  if (options.region) params.set('region', options.region);
+  if (options.store) params.set('store', options.store);
+  if (options.department) params.set('department', options.department);
+  if (options.productId) params.set('productId', options.productId);
+  if (options.from !== undefined) params.set('from', String(options.from));
+  if (options.to !== undefined) params.set('to', String(options.to));
   const query = params.toString();
   return query ? `?${query}` : '';
 }
@@ -42,6 +59,11 @@ function mapAuditLog(raw: AuditLogApiRow): AuditLog {
     details: raw.details || '',
     category: raw.category,
     severity: raw.severity,
+    productId: raw.product_id || undefined,
+    productName: raw.product_name || undefined,
+    region: raw.region || undefined,
+    store: raw.store || undefined,
+    department: raw.department || undefined,
   };
 }
 
@@ -59,6 +81,11 @@ export async function createAuditLogEvent(input: {
   details?: string;
   category: AuditLog['category'];
   severity: AuditLog['severity'];
+  productId?: string;
+  productName?: string;
+  region?: string;
+  store?: string;
+  department?: string;
 }): Promise<AuditLog> {
   const response = await authFetch(`${appConfig.apiBaseUrl}/audit/logs`, {
     method: 'POST',

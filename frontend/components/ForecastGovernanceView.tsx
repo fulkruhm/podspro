@@ -15,14 +15,14 @@ import {
 import { getDisplayedReviewItems } from './forecastReviewUtils';
 import { appConfig } from '../config/appConfig';
 
-interface ForecastReviewViewProps {
+interface ForecastGovernanceViewProps {
   userRole: Role;
   currentUserName: string;
   filters: Filters;
   onRefreshData?: () => Promise<void> | void;
 }
 
-const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
+const ForecastGovernanceView: React.FC<ForecastGovernanceViewProps> = ({
   userRole,
   currentUserName,
   filters,
@@ -539,4 +539,4 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
   );
 };
 
-export default ForecastReviewView;
+export default ForecastGovernanceView;

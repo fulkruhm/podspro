@@ -1,4 +1,3 @@
-
 export type Role = 'admin' | 'store_user' | 'logistics_user' | 'sysadmin';
 
 export interface User {
@@ -83,6 +82,11 @@ export interface AuditLog {
   details: string;
   category: 'security' | 'provisioning' | 'system' | 'auth';
   severity: 'info' | 'warning' | 'critical';
+  productId?: string;
+  productName?: string;
+  region?: string;
+  store?: string;
+  department?: string;
 }
 export interface InventoryAnomaly {
   productId: string;

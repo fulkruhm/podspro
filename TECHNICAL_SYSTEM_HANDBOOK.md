@@ -181,12 +181,12 @@ Explainability strings are generated per forecast day and include:
 ### 11.1 Auth/session
 - `frontend/services/authSession.ts` handles bearer attachment and refresh retry flow
 
-### 11.2 Audit dashboard
+### 11.2 Action Intelligence panel
 - API client: `frontend/services/auditService.ts`
-- UI integration: `frontend/App.tsx`, `frontend/components/UserManagementView.tsx`
+- UI integration: `frontend/App.tsx`, `frontend/components/IdentityAccessView.tsx`
 - supports CSV export
 
-### 11.3 Forecast review admin panel
+### 11.3 Forecast Governance admin panel
 - queue monitor
 - failed job retry
 

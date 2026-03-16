@@ -1,13 +1,13 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './Sidebar';
-import DashboardView from './components/DashboardView';
-import InventoryView from './components/InventoryView';
-import LogisticsView from './components/LogisticsView';
-import AssistantView from './components/AssistantView';
-import ProfileView from './components/ProfileView';
-import UserManagementView from './components/UserManagementView';
-import ForecastReviewView from './components/ForecastReviewView';
+import CommandCenterView from './components/CommandCenterView';
+import InventoryIntelligenceView from './components/InventoryIntelligenceView';
+import LogisticsCommandView from './components/LogisticsCommandView';
+import DecisionCopilotView from './components/DecisionCopilotView';
+import MyProfileView from './components/MyProfileView';
+import IdentityAccessView from './components/IdentityAccessView';
+import ForecastGovernanceView from './components/ForecastGovernanceView';
+import ActionIntelligenceView from './components/ActionIntelligenceView';
 import Onboarding from './components/Onboarding';
 import FilterBar from './components/FilterBar';
 import LoginView from './components/LoginView';
@@ -26,7 +26,7 @@ const App: React.FC = () => {
   const [pendingQuery, setPendingQuery] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  
+
   const [products, setProducts] = useState<Product[]>([]);
   const [routes, setRoutes] = useState<FreightRoute[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -54,7 +54,7 @@ const App: React.FC = () => {
         setIsLoadingUsers(false);
       }
     };
-    
+
     loadUsers();
   }, [currentUser]);
 
@@ -70,10 +70,7 @@ const App: React.FC = () => {
     const loadData = async () => {
       try {
         setIsLoadingData(true);
-        const [productsData, routesData] = await Promise.all([
-          fetchProducts(),
-          fetchRoutes()
-        ]);
+        const [productsData, routesData] = await Promise.all([fetchProducts(), fetchRoutes()]);
         setProducts(productsData);
         setRoutes(routesData);
         setLastUpdated(Date.now());
@@ -85,7 +82,7 @@ const App: React.FC = () => {
         setIsLoadingData(false);
       }
     };
-    
+
     loadData();
   }, [currentUser]);
 
@@ -120,13 +117,18 @@ const App: React.FC = () => {
     store: '',
     department: '',
     product: '',
-    status: ''
+    status: '',
   });
 
   // Handle auto-filtering for store users
   useEffect(() => {
     if (currentUser?.role === 'store_user' && currentUser.assignedStore) {
-      setFilters(prev => ({ ...prev, store: currentUser.assignedStore || '', department: '', product: '' }));
+      setFilters((prev) => ({
+        ...prev,
+        store: currentUser.assignedStore || '',
+        department: '',
+        product: '',
+      }));
     } else if (currentUser?.role === 'admin' || currentUser?.role === 'sysadmin') {
       setFilters({ region: '', store: '', department: '', product: '', status: '' });
     }
@@ -147,8 +149,8 @@ const App: React.FC = () => {
 
   const handleUpdateUser = async (userId: string, updates: Partial<User>) => {
     // Update local state immediately for responsiveness
-    setSystemUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
-    
+    setSystemUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...updates } : u)));
+
     // Sync with database in background
     try {
       await updateUserInDB(userId, updates);
@@ -161,10 +163,10 @@ const App: React.FC = () => {
 
   const handleDeleteUser = (userId: string) => {
     if (currentUser && userId === currentUser.id) {
-      alert("Safety Protocol: You cannot delete your own active session.");
+      alert('Safety Protocol: You cannot delete your own active session.');
       return;
     }
-    setSystemUsers(prev => prev.filter(u => u.id !== userId));
+    setSystemUsers((prev) => prev.filter((u) => u.id !== userId));
   };
 
   const handleAddUser = (user: Omit<User, 'id'>) => {
@@ -174,7 +176,7 @@ const App: React.FC = () => {
       failedLoginAttempts: 0,
       isLocked: false,
     };
-    setSystemUsers(prev => [...prev, newUser]);
+    setSystemUsers((prev) => [...prev, newUser]);
   };
 
   const handleUpdateProfile = (updates: Partial<User>) => {
@@ -198,15 +200,24 @@ const App: React.FC = () => {
       details: log.details,
       category: log.category,
       severity: log.severity,
-    }).then((created) => {
-      setAuditLogs((prev) => [created, ...prev.filter((entry) => entry.id !== created.id)].slice(0, 500));
-    }).catch((error) => {
-      console.error('Failed to persist audit log:', error);
-    });
+      productId: log.productId,
+      productName: log.productName,
+      region: log.region,
+      store: log.store,
+      department: log.department,
+    })
+      .then((created) => {
+        setAuditLogs((prev) =>
+          [created, ...prev.filter((entry) => entry.id !== created.id)].slice(0, 500)
+        );
+      })
+      .catch((error) => {
+        console.error('Failed to persist audit log:', error);
+      });
   };
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
+    return products.filter((p) => {
       if (currentUser?.role === 'store_user' && p.store !== currentUser.assignedStore) return false;
       if (filters.region && p.region !== filters.region) return false;
       if (filters.store && p.store !== filters.store) return false;
@@ -232,10 +243,7 @@ const App: React.FC = () => {
   const handleRefreshData = async () => {
     setIsRefreshing(true);
     try {
-      const [productsData, routesData] = await Promise.all([
-        fetchProducts(),
-        fetchRoutes(),
-      ]);
+      const [productsData, routesData] = await Promise.all([fetchProducts(), fetchRoutes()]);
       setProducts(productsData);
       setRoutes(routesData);
       setLastUpdated(Date.now());
@@ -247,6 +255,17 @@ const App: React.FC = () => {
   };
 
   const triggerAssistantQuery = (query: string) => {
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        action: 'ASSISTANT_QUERY_TRIGGER',
+        details: `Assistant analysis requested: ${query.slice(0, 240)}`,
+        category: 'system',
+        severity: 'info',
+      });
+    }
+
     setPendingQuery(query);
     setActiveTab('assistant');
     setIsMobileMenuOpen(false);
@@ -273,17 +292,16 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     return (
-      <LoginView 
-        onLogin={handleLogin} 
-        systemUsers={systemUsers} 
+      <LoginView
+        onLogin={handleLogin}
+        systemUsers={systemUsers}
         onUpdateUser={handleUpdateUser}
-        addAuditLog={addAuditLog}
       />
     );
   }
 
   const handleUpdateProduct = (productId: string, updates: Partial<Product>) => {
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, ...updates } : p));
+    setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, ...updates } : p)));
   };
 
   const renderContent = () => {
@@ -292,18 +310,18 @@ const App: React.FC = () => {
     return (
       <div className="flex flex-col">
         {showFilter && (
-          <FilterBar 
-            products={products} 
+          <FilterBar
+            products={products}
             filteredCount={filteredProducts.length}
-            filters={filters} 
-            setFilters={setFilters} 
+            filters={filters}
+            setFilters={setFilters}
             isStoreFixed={currentUser.role === 'store_user'}
           />
         )}
         {activeTab === 'dashboard' && (
-          <DashboardView 
-            triggerQuery={triggerAssistantQuery} 
-            products={filteredProducts} 
+          <CommandCenterView
+            triggerQuery={triggerAssistantQuery}
+            products={filteredProducts}
             routes={currentUser.role === 'store_user' ? [] : routes}
             isLoadingData={isLoadingData}
             isRefreshing={isRefreshing}
@@ -315,27 +333,43 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'inventory' && (
-          <InventoryView 
-            triggerQuery={triggerAssistantQuery} 
-            products={filteredProducts} 
+          <InventoryIntelligenceView
+            triggerQuery={triggerAssistantQuery}
+            products={filteredProducts}
             isLoadingData={isLoadingData}
-            onClose={goBackToDashboard} 
+            onClose={goBackToDashboard}
             onUpdateProduct={handleUpdateProduct}
+            addAuditLog={addAuditLog}
           />
         )}
-        {activeTab === 'logistics' && (currentUser.role === 'admin' || currentUser.role === 'sysadmin' || currentUser.role === 'logistics_user') && (
-          <LogisticsView triggerQuery={triggerAssistantQuery} routes={routes} onClose={goBackToDashboard} />
-        )}
+        {activeTab === 'logistics' &&
+          (currentUser.role === 'admin' ||
+            currentUser.role === 'sysadmin' ||
+            currentUser.role === 'logistics_user') && (
+            <LogisticsCommandView
+              triggerQuery={triggerAssistantQuery}
+              routes={routes}
+              onClose={goBackToDashboard}
+            />
+          )}
         {activeTab === 'assistant' && (
-          <AssistantView initialQuery={pendingQuery} clearInitialQuery={() => setPendingQuery(null)} onClose={goBackToDashboard} />
+          <DecisionCopilotView
+            initialQuery={pendingQuery}
+            clearInitialQuery={() => setPendingQuery(null)}
+            onClose={goBackToDashboard}
+          />
         )}
         {activeTab === 'profile' && (
-          <ProfileView user={currentUser} onUpdate={handleUpdateProfile} onClose={goBackToDashboard} />
+          <MyProfileView
+            user={currentUser}
+            onUpdate={handleUpdateProfile}
+            onClose={goBackToDashboard}
+          />
         )}
         {activeTab === 'usermanagement' && currentUser.role === 'sysadmin' && (
-          <UserManagementView 
-            users={systemUsers} 
-            onUpdateUser={handleUpdateUser} 
+          <IdentityAccessView
+            users={systemUsers}
+            onUpdateUser={handleUpdateUser}
             onDeleteUser={handleDeleteUser}
             onAddUser={handleAddUser}
             currentSysAdminId={currentUser.id}
@@ -346,14 +380,23 @@ const App: React.FC = () => {
             products={products}
           />
         )}
-        {activeTab === 'forecastreview' && (currentUser.role === 'admin' || currentUser.role === 'sysadmin') && (
-          <ForecastReviewView
-            userRole={currentUser.role}
-            currentUserName={currentUser.name}
-            filters={filters}
-            onRefreshData={handleRefreshData}
-          />
-        )}
+        {activeTab === 'useractions' &&
+          (currentUser.role === 'admin' || currentUser.role === 'sysadmin') && (
+            <ActionIntelligenceView
+              onClose={goBackToDashboard}
+              products={products}
+              users={systemUsers}
+            />
+          )}
+        {activeTab === 'forecastreview' &&
+          (currentUser.role === 'admin' || currentUser.role === 'sysadmin') && (
+            <ForecastGovernanceView
+              userRole={currentUser.role}
+              currentUserName={currentUser.name}
+              filters={filters}
+              onRefreshData={handleRefreshData}
+            />
+          )}
       </div>
     );
   };
@@ -361,57 +404,82 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
       {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
-      
+
       <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
         <h1 className="text-xl font-bold tracking-tight text-blue-400">PODS</h1>
-        <button 
+        <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="p-2 text-slate-400 hover:text-white"
         >
           {isMobileMenuOpen ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
             </svg>
           )}
         </button>
       </div>
 
       {isMobileMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         ></div>
       )}
 
-      <div className={`
+      <div
+        className={`
         fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out bg-slate-900
-        md:relative md:translate-x-0
+        md:relative md:translate-x-0 md:w-72
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <Sidebar 
-          activeTab={activeTab} 
-          setActiveTab={handleTabChange} 
+      `}
+      >
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={handleTabChange}
           user={currentUser}
           onLogout={handleLogout}
         />
       </div>
 
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">
-          {renderContent()}
-        </div>
+        <div className="max-w-7xl mx-auto">{renderContent()}</div>
       </main>
-      
+
       {/* Floating AI Advisor button - accessible to all roles with advisor access */}
-      {(currentUser.role === 'admin' || currentUser.role === 'sysadmin' || currentUser.role === 'store_user' || currentUser.role === 'logistics_user') && (
+      {(currentUser.role === 'admin' ||
+        currentUser.role === 'sysadmin' ||
+        currentUser.role === 'store_user' ||
+        currentUser.role === 'logistics_user') && (
         <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-40">
-          <button 
-             onClick={() => setActiveTab('assistant')}
-             className="w-12 h-12 md:w-14 md:h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition cursor-pointer group"
+          <button
+            onClick={() => setActiveTab('assistant')}
+            className="w-12 h-12 md:w-14 md:h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition cursor-pointer group"
           >
             <span className="text-xl md:text-2xl group-hover:animate-bounce">🤖</span>
             <div className="absolute right-0 top-0 w-3 h-3 md:w-4 md:h-4 bg-red-500 rounded-full border-2 border-white"></div>

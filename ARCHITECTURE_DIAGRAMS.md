@@ -226,7 +226,7 @@ flowchart TB
   subgraph NODE["Node Backend - Express"]
     MW["Cross-cutting Middleware<br/>security headers, sanitize, CORS, rate limits"]
     AUTH["Auth Routes<br/>login/session/identity"]
-    USERS["User Routes<br/>RBAC + user management"]
+    USERS["User Routes<br/>RBAC + identity/access"]
     DATA["Data Routes<br/>products, logistics, analytics"]
     ANOM["Anomaly Routes<br/>operational anomaly APIs"]
     CHAT["Chat Routes<br/>message + stream + session lifecycle"]

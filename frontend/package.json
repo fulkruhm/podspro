@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "npm run lint:types && npm run lint:eslint",
-    "lint:phase2": "eslint \"components/ForecastReviewView.tsx\" \"components/forecastReviewUtils.ts\" \"components/DashboardView.tsx\" \"components/AnomalyVisualization.tsx\" \"components/ForecastVisualization.tsx\" \"components/MLDashboard.tsx\" \"components/UserManagementView.tsx\" \"components/ProductDetailView.tsx\" \"services/dataService.ts\" \"services/userService.ts\" \"services/auditService.ts\" \"services/mlService.ts\" \"components/__tests__/forecastReviewUtils.test.ts\" --max-warnings=0",
+    "lint:phase2": "eslint \"components/ForecastGovernanceView.tsx\" \"components/forecastReviewUtils.ts\" \"components/CommandCenterView.tsx\" \"components/AnomalyVisualization.tsx\" \"components/ForecastVisualization.tsx\" \"components/MLDashboard.tsx\" \"components/IdentityAccessView.tsx\" \"components/ProductDetailView.tsx\" \"services/dataService.ts\" \"services/userService.ts\" \"services/auditService.ts\" \"services/mlService.ts\" \"components/__tests__/forecastReviewUtils.test.ts\" --max-warnings=0",
     "lint:types": "tsc --noEmit",
     "lint:eslint": "eslint \"./**/*.{ts,tsx}\" --max-warnings=0 --ignore-pattern \"node_modules/**\" --ignore-pattern \"dist/**\"",
     "test": "vitest run"

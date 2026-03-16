@@ -54,10 +54,10 @@ This document documents the implementation of a Regional Analytics system (remov
 - **Visible to**: admin, logistics_user, sysadmin
 - **Hidden from**: store_user
 - Menu icon: 🌍 (globe) with descriptive label
-- Position: After "Inventory Engine", before "Logistics Engine"
+- Position: After "Inventory Intelligence", before "Logistics Command"
 
 **Segregation of Concerns**:
-- **Inventory Engine** (store-level): Available to all store_user roles
+- **Inventory Intelligence** (store-level): Available to all store_user roles
   - Shows store-specific products and stock levels
   - Includes embedded ML insights for individual products
   
@@ -85,9 +85,9 @@ This document documents the implementation of a Regional Analytics system (remov
 
 ### Component Hierarchy
 ```
-Dashboard
+Command Center
 ├── Sidebar (Role-based menu)
-│   ├── Inventory Engine (store-level)
+│   ├── Inventory Intelligence (store-level)
 │   │   └── ProductDetailView
 │   │       ├── ML Anomalies (embedded)
 │   │       └── ML Forecast (embedded)
@@ -189,10 +189,10 @@ Dashboard
 1. Login with store_user credentials
 2. "Regional Analytics" NOT visible in sidebar ✓
 3. Can only see:
-   - Dashboard
-   - Inventory Engine (their store only)
-   - AI Advisor
-   - User Profile
+  - Command Center
+  - Inventory Intelligence (their store only)
+  - Decision Copilot
+  - My Profile
 4. ProductDetailView shows embedded ML insights (anomalies + forecast for that product)
 
 ## Dependencies & Versions

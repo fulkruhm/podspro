@@ -36,11 +36,11 @@ PODS addresses these gaps by integrating data, forecasting, and action workflows
 
 ## 4. What the Platform Includes
 ### 4.1 Core User Experiences
-- Dashboard for operational visibility
+- Command Center for operational visibility
 - Inventory and logistics views for day-to-day monitoring
-- Forecast review queue for admin and sysadmin users
-- User management and security operations for sysadmin users
-- AI advisor for natural-language investigation
+- Forecast Governance queue for admin and sysadmin users
+- Identity & Access and security operations for sysadmin users
+- Decision Copilot for natural-language investigation
 
 ### 4.2 Forecasting and ML Capabilities
 - Forecasting with explainable exponential-smoothing demand projections

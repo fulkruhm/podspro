@@ -16,7 +16,7 @@ PODS uses a **hybrid architecture** with a **Python FastAPI microservice** for M
 ┌────────────────▼────────────────────────────┐
 │    Node.js Backend API (Port 3001)          │
 │  - Authentication & Session Management      │
-│  - User Management & RBAC                   │
+│  - Identity & Access + RBAC                 │
 │  - Data Management (Products, Routes)       │
 │  - Real-time Chat with Gemini               │
 │  - ML Service Gateway                       │

@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { User, Role, AuditLog, Product } from '../types';
-import { exportAuditLogsCsv } from '../services/auditService';
+import { exportAuditLogsCsv, fetchAuditLogs } from '../services/auditService';
 
-interface UserManagementViewProps {
+type AuditCategoryFilter = AuditLog['category'] | 'all';
+type AuditSeverityFilter = AuditLog['severity'] | 'all';
+
+interface IdentityAccessViewProps {
   users: User[];
   onUpdateUser: (userId: string, updates: Partial<User>) => void;
   onDeleteUser: (userId: string) => void;
@@ -15,7 +18,7 @@ interface UserManagementViewProps {
   products: Product[];
 }
 
-const UserManagementView: React.FC<UserManagementViewProps> = ({
+const IdentityAccessView: React.FC<IdentityAccessViewProps> = ({
   users,
   onUpdateUser,
   onDeleteUser,
@@ -29,6 +32,15 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLogsView, setShowLogsView] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const [logsData, setLogsData] = useState<AuditLog[]>(auditLogs);
+  const [auditCategoryFilter, setAuditCategoryFilter] = useState<AuditCategoryFilter>('all');
+  const [auditSeverityFilter, setAuditSeverityFilter] = useState<AuditSeverityFilter>('all');
+  const [auditUserFilter, setAuditUserFilter] = useState<string>('all');
+  const [auditFromDate, setAuditFromDate] = useState('');
+  const [auditToDate, setAuditToDate] = useState('');
+  const [auditSearch, setAuditSearch] = useState('');
   const [resetPassUser, setResetPassUser] = useState<User | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -45,6 +57,110 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   // Extract unique stores from products
   const uniqueStores = Array.from(new Set(products.map((p) => p.store))).sort();
+
+  useEffect(() => {
+    setLogsData(auditLogs);
+  }, [auditLogs]);
+
+  useEffect(() => {
+    if (!showLogsView) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadLogs = async () => {
+      setLogsLoading(true);
+      setLogsError(null);
+      try {
+        const fromTimestamp = auditFromDate
+          ? new Date(`${auditFromDate}T00:00:00.000`).getTime()
+          : undefined;
+        const toTimestamp = auditToDate
+          ? new Date(`${auditToDate}T23:59:59.999`).getTime()
+          : undefined;
+
+        const loaded = await fetchAuditLogs({
+          limit: 500,
+          category: auditCategoryFilter === 'all' ? undefined : auditCategoryFilter,
+          severity: auditSeverityFilter === 'all' ? undefined : auditSeverityFilter,
+          userId: auditUserFilter === 'all' ? undefined : auditUserFilter,
+          from: fromTimestamp,
+          to: toTimestamp,
+        });
+        if (!cancelled) {
+          setLogsData(loaded);
+        }
+      } catch (error) {
+        console.error('Failed to load filtered audit logs:', error);
+        if (!cancelled) {
+          setLogsError('Could not load fresh logs. Showing last available snapshot.');
+          setLogsData(auditLogs);
+        }
+      } finally {
+        if (!cancelled) {
+          setLogsLoading(false);
+        }
+      }
+    };
+
+    void loadLogs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showLogsView,
+    auditCategoryFilter,
+    auditSeverityFilter,
+    auditUserFilter,
+    auditFromDate,
+    auditToDate,
+    auditLogs,
+  ]);
+
+  const displayedAuditLogs = useMemo(() => {
+    const query = auditSearch.trim().toLowerCase();
+    if (!query) {
+      return logsData;
+    }
+
+    return logsData.filter((log) => {
+      return (
+        log.action.toLowerCase().includes(query) ||
+        log.details.toLowerCase().includes(query) ||
+        log.userName.toLowerCase().includes(query)
+      );
+    });
+  }, [logsData, auditSearch]);
+
+  const auditSummary = useMemo(() => {
+    const now = Date.now();
+    const last24hCutoff = now - 24 * 60 * 60 * 1000;
+
+    return {
+      total: displayedAuditLogs.length,
+      critical: displayedAuditLogs.filter((log) => log.severity === 'critical').length,
+      warnings: displayedAuditLogs.filter((log) => log.severity === 'warning').length,
+      last24h: displayedAuditLogs.filter((log) => log.timestamp >= last24hCutoff).length,
+    };
+  }, [displayedAuditLogs]);
+
+  const handleExportLogs = () => {
+    const fromTimestamp = auditFromDate
+      ? new Date(`${auditFromDate}T00:00:00.000`).getTime()
+      : undefined;
+    const toTimestamp = auditToDate ? new Date(`${auditToDate}T23:59:59.999`).getTime() : undefined;
+
+    void exportAuditLogsCsv({
+      limit: 1000,
+      category: auditCategoryFilter === 'all' ? undefined : auditCategoryFilter,
+      severity: auditSeverityFilter === 'all' ? undefined : auditSeverityFilter,
+      userId: auditUserFilter === 'all' ? undefined : auditUserFilter,
+      from: fromTimestamp,
+      to: toTimestamp,
+    });
+  };
 
   const handleToggleStatus = (user: User) => {
     const nextStatusMap: Record<User['status'], User['status']> = {
@@ -564,8 +680,116 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Total Events
+                  </p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">{auditSummary.total}</p>
+                </div>
+                <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-red-400">
+                    Critical
+                  </p>
+                  <p className="text-2xl font-black text-red-700 mt-1">{auditSummary.critical}</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                    Warnings
+                  </p>
+                  <p className="text-2xl font-black text-amber-700 mt-1">{auditSummary.warnings}</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
+                    Last 24h
+                  </p>
+                  <p className="text-2xl font-black text-blue-700 mt-1">{auditSummary.last24h}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <select
+                  value={auditCategoryFilter}
+                  onChange={(e) => setAuditCategoryFilter(e.target.value as AuditCategoryFilter)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="security">Security</option>
+                  <option value="auth">Auth</option>
+                  <option value="provisioning">Provisioning</option>
+                  <option value="system">System</option>
+                </select>
+
+                <select
+                  value={auditSeverityFilter}
+                  onChange={(e) => setAuditSeverityFilter(e.target.value as AuditSeverityFilter)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700"
+                >
+                  <option value="all">All Severity</option>
+                  <option value="critical">Critical</option>
+                  <option value="warning">Warning</option>
+                  <option value="info">Info</option>
+                </select>
+
+                <select
+                  value={auditUserFilter}
+                  onChange={(e) => setAuditUserFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700"
+                >
+                  <option value="all">All Users</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} (@{u.username})
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  type="search"
+                  placeholder="Search action/details"
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+                <label className="text-[11px] font-bold text-slate-500 flex items-center gap-2">
+                  <span className="uppercase tracking-widest text-[9px]">From</span>
+                  <input
+                    value={auditFromDate}
+                    onChange={(e) => setAuditFromDate(e.target.value)}
+                    type="date"
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                  />
+                </label>
+
+                <label className="text-[11px] font-bold text-slate-500 flex items-center gap-2">
+                  <span className="uppercase tracking-widest text-[9px]">To</span>
+                  <input
+                    value={auditToDate}
+                    onChange={(e) => setAuditToDate(e.target.value)}
+                    type="date"
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"
+                  />
+                </label>
+              </div>
+
+              {logsError && (
+                <div className="mb-4 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  {logsError}
+                </div>
+              )}
+
               <div className="space-y-3">
-                {auditLogs.length === 0 ? (
+                {logsLoading ? (
+                  <div className="text-center py-20">
+                    <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-slate-500 font-bold uppercase text-xs tracking-widest">
+                      Loading audit entries
+                    </p>
+                  </div>
+                ) : displayedAuditLogs.length === 0 ? (
                   <div className="text-center py-20">
                     <div className="text-4xl mb-4">📂</div>
                     <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">
@@ -573,7 +797,7 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
                     </p>
                   </div>
                 ) : (
-                  auditLogs.map((log) => (
+                  displayedAuditLogs.map((log) => (
                     <div
                       key={log.id}
                       className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-start space-x-4 hover:bg-slate-100/50 transition-colors"
@@ -623,15 +847,13 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
 
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Showing last 500 entries
+                Showing last 500 entries (filtered)
               </p>
               <button
-                onClick={() => {
-                  void exportAuditLogsCsv({ limit: 1000 });
-                }}
+                onClick={handleExportLogs}
                 className="text-[10px] font-black text-blue-700 uppercase tracking-widest hover:underline"
               >
-                Export CSV
+                Export CSV (Current Filter)
               </button>
             </div>
           </div>
@@ -888,4 +1110,4 @@ const UserManagementView: React.FC<UserManagementViewProps> = ({
   );
 };
 
-export default UserManagementView;
+export default IdentityAccessView;

@@ -1,5 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { getProducts, getProductById, getRoutes, getRouteById, updateProduct } from '../db.js';
+import {
+  getProducts,
+  getProductById,
+  getRoutes,
+  getRouteById,
+  updateProduct,
+  createAuditLog,
+} from '../db.js';
 import {
   validateRequestParams,
   validateRequestBody,
@@ -7,7 +14,7 @@ import {
   entityIdParamSchema,
 } from '../middleware/validation.js';
 import { apiLimiter, strictLimiter } from '../middleware/rateLimiter.js';
-import { requireAnyRole, requireAuthenticatedUser } from '../middleware/authz.js';
+import { requireAnyRole, requireAuthenticatedUser, getIdentity } from '../middleware/authz.js';
 
 export const dataRouter = Router();
 
@@ -55,6 +62,22 @@ dataRouter.put(
     try {
       const { id } = req.params;
       const product = await updateProduct(id, req.body);
+
+      const identity = getIdentity(res);
+      await createAuditLog({
+        userId: identity?.userId ?? null,
+        userName: identity?.name ?? null,
+        action: 'PRODUCT_UPDATE',
+        details: `Updated product ${id} fields: ${Object.keys(req.body).join(', ') || 'none'}`,
+        category: 'system',
+        severity: 'info',
+        productId: product?.id ?? id,
+        productName: product?.name ?? null,
+        region: product?.region ?? null,
+        store: product?.store ?? null,
+        department: product?.department ?? null,
+      });
+
       res.json({ product });
     } catch (error) {
       console.error('Error updating product:', error);

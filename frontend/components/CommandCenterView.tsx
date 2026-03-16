@@ -16,7 +16,7 @@ import {
   ForecastBatchStatusResponse,
 } from '../services/mlService';
 
-interface DashboardViewProps {
+interface CommandCenterViewProps {
   triggerQuery: (query: string) => void;
   products: Product[];
   routes: FreightRoute[];
@@ -29,7 +29,7 @@ interface DashboardViewProps {
   filters: Filters;
 }
 
-const DashboardView: React.FC<DashboardViewProps> = ({
+const CommandCenterView: React.FC<CommandCenterViewProps> = ({
   triggerQuery,
   products,
   routes,
@@ -819,4 +819,4 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   );
 };
 
-export default DashboardView;
+export default CommandCenterView;

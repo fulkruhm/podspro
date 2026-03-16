@@ -1,12 +1,11 @@
 
 import React, { useState } from 'react';
-import { User, AuditLog } from '../types';
+import { User } from '../types';
 
 interface LoginViewProps {
   onLogin: (user: User, token: string, refreshToken: string) => void;
   systemUsers: User[];
   onUpdateUser: (userId: string, updates: Partial<User>) => void;
-  addAuditLog: (log: Omit<AuditLog, 'id' | 'timestamp'>) => void;
 }
 
 export const INITIAL_USERS: User[] = [
@@ -24,11 +23,13 @@ export const INITIAL_USERS: User[] = [
   { id: 'l1', name: 'Logistics Analyst 1', username: 'log1', role: 'logistics_user', email: 'log1@pods-logistics.com', phoneNumber: '+1 (555) 0301', password: 'log1', status: 'active', failedLoginAttempts: 0, isLocked: false },
 ];
 
-const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
+const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
   const [showDemoHint, setShowDemoHint] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -60,27 +61,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
         }
         
         onLogin(user, token, refreshToken);
-        addAuditLog({
-          userId: user.id,
-          userName: user.name,
-          action: 'LOGIN_SUCCESS',
-          details: `Successful login for @${user.username}`,
-          category: 'auth',
-          severity: 'info'
-        });
       } else {
         const errorData = await response.json();
         console.log('[LoginView] Login failed:', errorData);
         setError(errorData.error || 'Login failed');
-        
-        addAuditLog({
-          userId: 'unknown',
-          userName: 'Unknown User',
-          action: 'LOGIN_FAILURE',
-          details: `Login attempt failed for @${username}: ${errorData.error}`,
-          category: 'auth',
-          severity: 'warning'
-        });
       }
     } catch (error) {
       console.error('[LoginView] Connection error:', error);
@@ -118,9 +102,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-900/10 blur-[150px] rounded-full"></div>
       </div>
 
-      <div className="max-w-[480px] w-full z-10 px-6 animate-in fade-in duration-1000">
+      <div className="max-w-[460px] w-full z-10 px-6 animate-in fade-in duration-1000">
         {/* Branding Area */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-6">
           <div className="flex items-center justify-center space-x-4 mb-4">
             <div className="relative">
               <div className="absolute inset-0 bg-blue-600/20 blur-xl rounded-full"></div>
@@ -128,7 +112,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
             </div>
-            <h1 className="text-8xl font-display text-white tracking-wider leading-none">PODS</h1>
+            <h1 className="text-6xl md:text-7xl font-display text-white tracking-wider leading-none">
+              PODS
+            </h1>
           </div>
           <div className="flex items-center justify-center space-x-3">
             <div className="h-[1px] w-12 bg-blue-500/30"></div>
@@ -145,8 +131,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
           <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-blue-400"></div>
           <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-blue-400"></div>
 
-          <div className="p-10 md:p-12">
-            <div className="mb-10 flex justify-between items-end border-b border-white/5 pb-4">
+          <div className="p-7 md:p-9">
+            <div className="mb-6 flex justify-between items-end border-b border-white/5 pb-4">
               <div>
                 <h2 className="text-xs font-bold text-blue-400 uppercase tracking-[0.3em]">Node Authorization</h2>
                 <p className="text-slate-500 text-[10px] mt-1">SECURE PROTOCOL v4.2.0</p>
@@ -156,14 +142,14 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
               </div>
             </div>
             
-            <form onSubmit={handleLogin} className="space-y-10">
+            <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-1">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">System Handle</label>
                 <input 
                   type="text" 
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-transparent border-b border-blue-500/30 py-3 text-sm font-medium text-white focus:border-blue-400 focus:outline-none transition-all placeholder:text-slate-700 glow-blue-focus"
+                  className="w-full bg-transparent border-b border-blue-500/30 py-2.5 text-sm font-medium text-white focus:border-blue-400 focus:outline-none transition-all placeholder:text-slate-700 glow-blue-focus"
                   placeholder="ID_IDENTIFIER"
                   required
                 />
@@ -171,26 +157,46 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
 
               <div className="space-y-1">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Access Token</label>
-                <input 
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-transparent border-b border-blue-500/30 py-3 text-sm font-medium text-white focus:border-blue-400 focus:outline-none transition-all placeholder:text-slate-700 glow-blue-focus"
-                  placeholder="••••••••"
-                  required
-                />
+                <div className="flex items-center border-b border-blue-500/30 focus-within:border-blue-400 transition-all glow-blue-focus">
+                  <input
+                    type={isPasswordVisible ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyUp={(e) => setCapsLockOn(e.getModifierState('CapsLock'))}
+                    onBlur={() => setCapsLockOn(false)}
+                    className="w-full bg-transparent py-2.5 text-sm font-medium text-white focus:outline-none placeholder:text-slate-700"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordVisible((prev) => !prev)}
+                    className="text-[10px] font-bold text-blue-400 hover:text-blue-300 transition-colors px-2 py-1"
+                    aria-label={isPasswordVisible ? 'Hide access token' : 'Show access token'}
+                  >
+                    {isPasswordVisible ? 'HIDE' : 'SHOW'}
+                  </button>
+                </div>
+                {capsLockOn && (
+                  <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider mt-1">
+                    Caps Lock is ON
+                  </p>
+                )}
               </div>
 
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 text-[10px] font-bold uppercase tracking-wider flex items-center animate-in shake duration-300">
-                  <span className="mr-3">ERR_AUTH:</span> {error}
-                </div>
-              )}
+              <div className="min-h-[40px]">
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/50 text-red-300 px-4 py-3 text-[10px] font-bold uppercase tracking-wider flex items-center animate-in fade-in duration-200">
+                    <span className="mr-3">AUTH ERROR</span>
+                    <span className="text-red-200">{error}</span>
+                  </div>
+                )}
+              </div>
 
               <button 
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-[#0A1A4D] to-[#1A56FF] text-white font-bold py-4 hover:brightness-110 transition-all active:scale-[0.99] shadow-[0_0_20px_rgba(26,86,255,0.3)] flex items-center justify-center group uppercase tracking-[0.3em] text-xs relative overflow-hidden"
+                className="w-full bg-gradient-to-r from-[#0A1A4D] to-[#1A56FF] text-white font-bold py-3.5 hover:brightness-110 transition-all active:scale-[0.99] shadow-[0_0_20px_rgba(26,86,255,0.3)] flex items-center justify-center group uppercase tracking-[0.3em] text-xs relative overflow-hidden"
               >
                 {/* Pulse Animation Overlay */}
                 <div className="absolute inset-0 bg-white/5 animate-pulse pointer-events-none"></div>
@@ -206,9 +212,15 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
                   </>
                 )}
               </button>
+
+              <div className="flex items-center justify-center gap-2 text-[8px] uppercase tracking-widest text-slate-500 font-bold">
+                <span>Secure Session</span>
+                <span>|</span>
+                <span>Role-Aware Access</span>
+              </div>
             </form>
 
-            <div className="mt-12 pt-6 border-t border-white/5 flex justify-between items-center">
+            <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center">
               <div className="flex space-x-2">
                 <div className="px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-sm">
                   <span className="text-[8px] font-bold text-emerald-400 tracking-tighter">AES-256</span>
@@ -223,7 +235,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
         </div>
         
         {/* Access Information */}
-        <div className="mt-8 flex flex-col items-center">
+        <div className="mt-4 flex flex-col items-center">
           <button 
             onClick={() => setShowDemoHint(!showDemoHint)}
             className="text-slate-600 hover:text-blue-400 transition-colors text-[9px] font-bold uppercase tracking-[0.3em] flex items-center space-x-2"

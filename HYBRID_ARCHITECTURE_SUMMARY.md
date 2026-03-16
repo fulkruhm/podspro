@@ -7,7 +7,7 @@
 ## Overview
 
 PODS has a **hybrid Node.js + Python microservice architecture**:
-- **Node.js Backend** (Port 3001): REST APIs, authentication, user management
+- **Node.js Backend** (Port 3001): REST APIs, authentication, identity and access
 - **Python ML Service** (Port 5000/5001): Advanced machine learning and anomaly detection
 - **API-First Design**: ML service callable via backend gateway (/api/ml/* endpoints)
 
@@ -147,7 +147,7 @@ ml-service:
 ┌──────────────────▼──────────────────────┐
 │  Node.js Backend (Port 3001)             │
 │  ✓ Auth & Session Management             │
-│  ✓ User Management & RBAC                │
+│  ✓ Identity & Access + RBAC              │
 │  ✓ Data APIs (Products, Routes)          │
 │  ✓ Chat with Gemini                      │
 │  ✓ ML Service Gateway (/api/ml/*)        │

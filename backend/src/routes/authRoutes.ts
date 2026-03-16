@@ -7,6 +7,7 @@ import {
   revokeRefreshToken,
   revokeAccessToken,
   cleanupExpiredAuthTokens,
+  createAuditLog,
 } from '../db.js';
 import {
   validateRequestBody,
@@ -18,6 +19,21 @@ import { signAuthToken, signRefreshToken, verifyAuthToken } from '../auth/token.
 import { requireAuthenticatedUser, getIdentity } from '../middleware/authz.js';
 
 export const authRouter = Router();
+
+async function writeAuditSafely(input: {
+  userId?: string | null;
+  userName?: string | null;
+  action: string;
+  details?: string;
+  category: 'auth' | 'security' | 'system' | 'provisioning';
+  severity: 'info' | 'warning' | 'critical';
+}) {
+  try {
+    await createAuditLog(input);
+  } catch (error) {
+    console.error('Auth audit write failed:', error);
+  }
+}
 
 // Login validation schema
 const loginSchema = z.object({
@@ -38,16 +54,40 @@ authRouter.post(
       const user = await getUserByUsername(username);
 
       if (!user) {
+        await writeAuditSafely({
+          userId: null,
+          userName: username,
+          action: 'LOGIN_FAILURE',
+          details: `Login failed for @${username}: user not found`,
+          category: 'auth',
+          severity: 'warning',
+        });
         return res.status(401).json({ error: 'ERR_AUTH: System handle not found' });
       }
 
       // Simple password comparison (in production, use bcrypt hashing)
       if (user.password !== password) {
+        await writeAuditSafely({
+          userId: user.id,
+          userName: user.name,
+          action: 'LOGIN_FAILURE',
+          details: `Login failed for @${user.username}: invalid credentials`,
+          category: 'auth',
+          severity: 'warning',
+        });
         return res.status(401).json({ error: 'ERR_AUTH: Invalid credentials' });
       }
 
       // Check if account is locked
       if (user.is_locked) {
+        await writeAuditSafely({
+          userId: user.id,
+          userName: user.name,
+          action: 'LOGIN_FAILURE',
+          details: `Login blocked for @${user.username}: account locked`,
+          category: 'security',
+          severity: 'critical',
+        });
         return res.status(403).json({
           error: 'ERR_AUTH: Account locked due to too many failed attempts',
         });
@@ -55,6 +95,14 @@ authRouter.post(
 
       // Check if account is active
       if (user.status !== 'active' && user.username !== 'sysadmin') {
+        await writeAuditSafely({
+          userId: user.id,
+          userName: user.name,
+          action: 'LOGIN_FAILURE',
+          details: `Login blocked for @${user.username}: account is ${user.status}`,
+          category: 'auth',
+          severity: 'warning',
+        });
         return res.status(403).json({
           error: `ERR_AUTH: Account is ${user.status}`,
         });
@@ -85,6 +133,15 @@ authRouter.post(
         expiresAtIso: new Date(
           (Math.floor(Date.now() / 1000) + refreshTokenResult.expiresInSeconds) * 1000
         ).toISOString(),
+      });
+
+      await writeAuditSafely({
+        userId: userWithoutPassword.id,
+        userName: userWithoutPassword.name,
+        action: 'LOGIN_SUCCESS',
+        details: `Successful login for @${userWithoutPassword.username}`,
+        category: 'auth',
+        severity: 'info',
       });
 
       res.json({
@@ -197,6 +254,15 @@ authRouter.post(
           await revokeRefreshToken(payload.jti);
         }
       }
+
+      await writeAuditSafely({
+        userId: identity.userId,
+        userName: identity.name,
+        action: 'LOGOUT',
+        details: `Logout for @${identity.username}`,
+        category: 'auth',
+        severity: 'info',
+      });
 
       return res.json({ success: true });
     } catch (error) {

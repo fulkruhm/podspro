@@ -44,8 +44,11 @@ interface UserWriteInput {
 }
 
 let databaseInitialized = false;
+let auditLogPurgeTimer: NodeJS.Timeout | null = null;
 
 const BATCH_RUN_STALE_MINUTES = appConfig.batchRunStaleMinutes;
+const AUDIT_LOG_RETENTION_DAYS = appConfig.auditLogRetentionDays;
+const AUDIT_LOG_PURGE_INTERVAL_MINUTES = appConfig.auditLogPurgeIntervalMinutes;
 
 // Wait for database to be ready
 async function waitForDatabase(maxRetries = 30, delayMs = 1000) {
@@ -185,14 +188,34 @@ async function ensureAuditLogTable() {
       details TEXT,
       category VARCHAR(50) NOT NULL,
       severity VARCHAR(50) NOT NULL,
+      product_id VARCHAR(255),
+      product_name VARCHAR(255),
+      region VARCHAR(255),
+      store VARCHAR(255),
+      department VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  await pool.query('ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS product_id VARCHAR(255)');
+  await pool.query('ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS product_name VARCHAR(255)');
+  await pool.query('ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS region VARCHAR(255)');
+  await pool.query('ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS store VARCHAR(255)');
+  await pool.query('ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS department VARCHAR(255)');
 
   await pool.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)');
 
   await pool.query(
     'CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC)'
+  );
+
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_audit_logs_product_id ON audit_logs(product_id)'
+  );
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_region ON audit_logs(region)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_store ON audit_logs(store)');
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_audit_logs_department ON audit_logs(department)'
   );
 }
 
@@ -207,6 +230,11 @@ async function initializeDatabase() {
     await ensureAuthTokenTables();
     await ensureAuditLogTable();
     databaseInitialized = true;
+
+    if (appConfig.nodeEnv !== 'test') {
+      await purgeOldAuditLogs();
+      startAuditLogPurgeScheduler();
+    }
   } catch (err) {
     databaseInitialized = false;
     console.error('Fatal: Could not initialize database:', err);
@@ -1148,7 +1176,51 @@ export async function cleanupExpiredAuthTokens() {
   await pool.query('DELETE FROM auth_refresh_tokens WHERE expires_at < NOW()');
 }
 
+export async function purgeOldAuditLogs(retentionDays = AUDIT_LOG_RETENTION_DAYS) {
+  const safeRetentionDays = Number.isFinite(retentionDays)
+    ? Math.max(1, Math.floor(retentionDays))
+    : AUDIT_LOG_RETENTION_DAYS;
+  const cutoffTimestamp = Date.now() - safeRetentionDays * 24 * 60 * 60 * 1000;
+
+  const result = await pool.query('DELETE FROM audit_logs WHERE timestamp < $1', [cutoffTimestamp]);
+
+  const deletedRows = result.rowCount ?? 0;
+  if (deletedRows > 0) {
+    console.log(
+      `Audit log retention purge removed ${deletedRows} rows older than ${safeRetentionDays} days`
+    );
+  }
+
+  return deletedRows;
+}
+
+function startAuditLogPurgeScheduler() {
+  if (auditLogPurgeTimer) {
+    clearInterval(auditLogPurgeTimer);
+  }
+
+  const intervalMs = Math.max(60_000, AUDIT_LOG_PURGE_INTERVAL_MINUTES * 60_000);
+  auditLogPurgeTimer = setInterval(() => {
+    void purgeOldAuditLogs().catch((error: unknown) => {
+      console.error('Audit log retention purge failed:', error);
+    });
+  }, intervalMs);
+
+  if (typeof auditLogPurgeTimer.unref === 'function') {
+    auditLogPurgeTimer.unref();
+  }
+
+  console.log(
+    `Audit log purge scheduler started: retention=${AUDIT_LOG_RETENTION_DAYS} days interval=${AUDIT_LOG_PURGE_INTERVAL_MINUTES} minutes`
+  );
+}
+
 export async function closePool() {
+  if (auditLogPurgeTimer) {
+    clearInterval(auditLogPurgeTimer);
+    auditLogPurgeTimer = null;
+  }
+
   await pool.end();
 }
 
@@ -1226,6 +1298,11 @@ export interface AuditLogRecord {
   details: string | null;
   category: AuditLogCategory;
   severity: AuditLogSeverity;
+  product_id: string | null;
+  product_name: string | null;
+  region: string | null;
+  store: string | null;
+  department: string | null;
 }
 
 export async function createAuditLog(input: {
@@ -1235,15 +1312,34 @@ export async function createAuditLog(input: {
   details?: string | null;
   category: AuditLogCategory;
   severity: AuditLogSeverity;
+  productId?: string | null;
+  productName?: string | null;
+  region?: string | null;
+  store?: string | null;
+  department?: string | null;
 }) {
   const id = `audit_${randomUUID()}`;
   const timestamp = Date.now();
 
   const result = await pool.query(
     `
-      INSERT INTO audit_logs (id, timestamp, user_id, user_name, action, details, category, severity)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, timestamp, user_id, user_name, action, details, category, severity
+      INSERT INTO audit_logs (
+        id,
+        timestamp,
+        user_id,
+        user_name,
+        action,
+        details,
+        category,
+        severity,
+        product_id,
+        product_name,
+        region,
+        store,
+        department
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, timestamp, user_id, user_name, action, details, category, severity, product_id, product_name, region, store, department
     `,
     [
       id,
@@ -1254,6 +1350,11 @@ export async function createAuditLog(input: {
       input.details ?? null,
       input.category,
       input.severity,
+      input.productId ?? null,
+      input.productName ?? null,
+      input.region ?? null,
+      input.store ?? null,
+      input.department ?? null,
     ]
   );
 
@@ -1266,6 +1367,12 @@ export async function getAuditLogs(options: {
   category?: AuditLogCategory;
   severity?: AuditLogSeverity;
   userId?: string;
+  region?: string;
+  store?: string;
+  department?: string;
+  productId?: string;
+  from?: number;
+  to?: number;
 }) {
   const limit = Number.isFinite(options.limit)
     ? Math.max(1, Math.min(1000, Math.floor(options.limit!)))
@@ -1290,6 +1397,36 @@ export async function getAuditLogs(options: {
     whereClauses.push(`user_id = $${params.length}`);
   }
 
+  if (options.region) {
+    params.push(options.region);
+    whereClauses.push(`region = $${params.length}`);
+  }
+
+  if (options.store) {
+    params.push(options.store);
+    whereClauses.push(`store = $${params.length}`);
+  }
+
+  if (options.department) {
+    params.push(options.department);
+    whereClauses.push(`department = $${params.length}`);
+  }
+
+  if (options.productId) {
+    params.push(options.productId);
+    whereClauses.push(`product_id = $${params.length}`);
+  }
+
+  if (Number.isFinite(options.from)) {
+    params.push(Math.floor(options.from!));
+    whereClauses.push(`timestamp >= $${params.length}`);
+  }
+
+  if (Number.isFinite(options.to)) {
+    params.push(Math.floor(options.to!));
+    whereClauses.push(`timestamp <= $${params.length}`);
+  }
+
   params.push(limit);
   const limitParam = `$${params.length}`;
   params.push(offset);
@@ -1299,7 +1436,20 @@ export async function getAuditLogs(options: {
 
   const result = await pool.query(
     `
-      SELECT id, timestamp, user_id, user_name, action, details, category, severity
+      SELECT
+        id,
+        timestamp,
+        user_id,
+        user_name,
+        action,
+        details,
+        category,
+        severity,
+        product_id,
+        product_name,
+        region,
+        store,
+        department
       FROM audit_logs
       ${whereSql}
       ORDER BY timestamp DESC

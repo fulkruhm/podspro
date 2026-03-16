@@ -184,13 +184,24 @@ export const forecastBatchRetryBodySchema = z
   })
   .strict();
 
-export const auditLogQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(1000).optional(),
-  offset: z.coerce.number().int().min(0).max(50000).optional(),
-  category: z.enum(['security', 'provisioning', 'system', 'auth']).optional(),
-  severity: z.enum(['info', 'warning', 'critical']).optional(),
-  userId: z.string().min(1).max(255).optional(),
-});
+export const auditLogQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(1000).optional(),
+    offset: z.coerce.number().int().min(0).max(50000).optional(),
+    category: z.enum(['security', 'provisioning', 'system', 'auth']).optional(),
+    severity: z.enum(['info', 'warning', 'critical']).optional(),
+    userId: z.string().min(1).max(255).optional(),
+    region: z.string().min(1).max(255).optional(),
+    store: z.string().min(1).max(255).optional(),
+    department: z.string().min(1).max(255).optional(),
+    productId: z.string().min(1).max(255).optional(),
+    from: z.coerce.number().int().min(0).optional(),
+    to: z.coerce.number().int().min(0).optional(),
+  })
+  .refine((data) => data.from === undefined || data.to === undefined || data.from <= data.to, {
+    message: '`from` must be less than or equal to `to`',
+    path: ['from'],
+  });
 
 export const auditLogCreateBodySchema = z
   .object({
@@ -198,6 +209,11 @@ export const auditLogCreateBodySchema = z
     details: z.string().max(5000).optional(),
     category: z.enum(['security', 'provisioning', 'system', 'auth']),
     severity: z.enum(['info', 'warning', 'critical']),
+    productId: z.string().min(1).max(255).optional(),
+    productName: z.string().min(1).max(255).optional(),
+    region: z.string().min(1).max(255).optional(),
+    store: z.string().min(1).max(255).optional(),
+    department: z.string().min(1).max(255).optional(),
   })
   .strict();
 
