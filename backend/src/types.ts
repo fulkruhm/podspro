@@ -1,4 +1,3 @@
-
 export type Role = 'admin' | 'store_user' | 'logistics_user' | 'sysadmin';
 
 export interface User {

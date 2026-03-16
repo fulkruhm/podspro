@@ -7,6 +7,10 @@ let redisConnectAttempted = false;
 
 const inMemoryCache = new Map<string, { expiresAt: number; value: string }>();
 
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function getRedisUrl() {
   return loadAppConfig().redisUrl;
 }
@@ -47,8 +51,11 @@ async function getRedisClient() {
     try {
       await redisClient.connect();
       console.log('[redisCache] Redis connection established');
-    } catch (error: any) {
-      console.error('[redisCache] Failed to connect to Redis, using in-memory fallback:', error?.message || error);
+    } catch (error: unknown) {
+      console.error(
+        '[redisCache] Failed to connect to Redis, using in-memory fallback:',
+        toErrorMessage(error)
+      );
       return null;
     }
   }

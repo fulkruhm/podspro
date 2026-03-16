@@ -41,7 +41,7 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
  * Input sanitization - prevent common attacks
  */
 export function sanitizeInput(req: Request, _res: Response, next: NextFunction) {
-  const sanitize = (value: any): any => {
+  const sanitize = (value: unknown): unknown => {
     if (typeof value === 'string') {
       // Remove potentially dangerous characters
       return value
@@ -54,7 +54,7 @@ export function sanitizeInput(req: Request, _res: Response, next: NextFunction) 
         return value.map(sanitize);
       }
 
-      const sanitized: any = {};
+      const sanitized: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(value)) {
         sanitized[key] = sanitize(val);
       }
@@ -64,9 +64,9 @@ export function sanitizeInput(req: Request, _res: Response, next: NextFunction) 
     return value;
   };
 
-  req.body = sanitize(req.body);
-  req.query = sanitize(req.query);
-  req.params = sanitize(req.params);
+  req.body = sanitize(req.body) as Request['body'];
+  req.query = sanitize(req.query) as Request['query'];
+  req.params = sanitize(req.params) as Request['params'];
 
   next();
 }

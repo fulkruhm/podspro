@@ -1,6 +1,6 @@
 from datetime import datetime
+
 from pydantic import BaseModel
-from typing import List, Optional
 
 
 class InventoryDatapoint(BaseModel):
@@ -14,7 +14,7 @@ class InventoryDatapoint(BaseModel):
 
 class AnomalyDetectionRequest(BaseModel):
     """Request for anomaly detection analysis"""
-    datapoints: List[InventoryDatapoint]
+    datapoints: list[InventoryDatapoint]
     sensitivity: float = 0.05
 
 
@@ -32,9 +32,9 @@ class ForecastRequest(BaseModel):
     """Request for demand forecasting"""
     product_id: str
     store_id: str
-    historical_demand: List[float]
-    historical_features: Optional[List[dict]] = None
-    future_features: Optional[List[dict]] = None
+    historical_demand: list[float]
+    historical_features: list[dict] | None = None
+    future_features: list[dict] | None = None
     forecast_days: int = 7
 
 
@@ -42,10 +42,10 @@ class ForecastResult(BaseModel):
     """Demand forecast result"""
     product_id: str
     store_id: str
-    forecast: List[float]
-    confidence_interval: List[float]
+    forecast: list[float]
+    confidence_interval: list[float]
     trend: str
-    explainability: List[str]
+    explainability: list[str]
     model_name: str
 
     model_config = {

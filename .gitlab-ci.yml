@@ -1,0 +1,112 @@
+stages:
+  - verify
+  - security
+  - deploy
+
+default:
+  interruptible: true
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+    - frontend/node_modules/
+    - backend/node_modules/
+
+node_checks:
+  stage: verify
+  image: node:20
+  script:
+    - npm ci
+    - npm run format:check
+    - npm run lint
+    - npm run test -w backend
+    - npm run test -w frontend
+
+ml_tests:
+  stage: verify
+  image: python:3.11
+  cache:
+    key:
+      files:
+        - ml-service/requirements.txt
+    paths:
+      - .cache/pip
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  script:
+    - python -m pip install --upgrade pip
+    - pip install -r ml-service/requirements.txt
+    - pip install ruff
+    - ruff check ml-service
+    - cd ml-service
+    - pytest -q
+
+node_security_audit:
+  stage: security
+  image: node:20
+  allow_failure: true
+  script:
+    - npm ci
+    - npm run security:npm
+
+python_security_audit:
+  stage: security
+  image: python:3.11
+  allow_failure: true
+  cache:
+    key:
+      files:
+        - ml-service/requirements.txt
+    paths:
+      - .cache/pip
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  script:
+    - python -m pip install --upgrade pip
+    - pip install pip-audit
+    - pip-audit -r ml-service/requirements.txt
+
+deploy_gcp:
+  stage: deploy
+  image: google/cloud-sdk:slim
+  needs:
+    - node_checks
+    - ml_tests
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $ENABLE_GCP_DEPLOY == "true"'
+  environment:
+    name: production
+  variables:
+    GCP_REGION: us-central1
+    GCP_ARTIFACT_REGISTRY_REPO: pods
+    CLOUD_RUN_SERVICE: pods-backend
+  before_script:
+    - test -n "$GCP_PROJECT_ID" || (echo "Missing GCP_PROJECT_ID" && exit 1)
+    - test -n "$GCP_SERVICE_ACCOUNT_KEY" || (echo "Missing GCP_SERVICE_ACCOUNT_KEY" && exit 1)
+    - test -n "$DATABASE_URL" || (echo "Missing DATABASE_URL" && exit 1)
+    - test -n "$AUTH_SECRET" || (echo "Missing AUTH_SECRET" && exit 1)
+    - test -n "$ML_SERVICE_URL" || (echo "Missing ML_SERVICE_URL" && exit 1)
+    - printf '%s' "$GCP_SERVICE_ACCOUNT_KEY" > "$CI_PROJECT_DIR/gcp-key.json"
+    - gcloud auth activate-service-account --key-file="$CI_PROJECT_DIR/gcp-key.json"
+    - gcloud config set project "$GCP_PROJECT_ID"
+    - gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+  script:
+    - export IMAGE_URI="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$GCP_ARTIFACT_REGISTRY_REPO/pods-backend:$CI_COMMIT_SHORT_SHA"
+    - gcloud builds submit . --config cloudbuild.backend.yaml --substitutions=_IMAGE_URI="$IMAGE_URI"
+    - >-
+      gcloud run deploy "$CLOUD_RUN_SERVICE"
+      --image "$IMAGE_URI"
+      --region "$GCP_REGION"
+      --platform managed
+      --allow-unauthenticated
+      --set-env-vars "NODE_ENV=production,DATABASE_URL=$DATABASE_URL,REDIS_URL=$REDIS_URL,ML_SERVICE_URL=$ML_SERVICE_URL,AUTH_SECRET=$AUTH_SECRET"
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/gcp-key.json"

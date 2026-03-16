@@ -7,8 +7,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AlertCircle, TrendingUp, AlertTriangle } from 'lucide-react';
 import { AnomalyResult, detectAnomalies, AnomalyDatapoint } from '../services/mlService';
 
+interface AnomalyProduct {
+  id: string;
+  name: string;
+  region?: string;
+  store?: string;
+  currentStock?: number;
+  avgDailyDemand?: number;
+}
+
 interface AnomalyViewProps {
-  products?: any[];
+  products?: AnomalyProduct[];
 }
 
 export default function AnomalyView({ products = [] }: AnomalyViewProps) {
@@ -20,18 +29,18 @@ export default function AnomalyView({ products = [] }: AnomalyViewProps) {
   const [selectedProduct, setSelectedProduct] = useState<string>('');
 
   // Get unique regions and products
-  const regions = useMemo(() => 
-    [...new Set(products.map((p: any) => p.region).filter(Boolean))],
+  const regions = useMemo(
+    () => [...new Set(products.map((p) => p.region).filter(Boolean))],
     [products]
   );
 
-  const productsInRegion = useMemo(() => 
-    products.filter((p: any) => p.region === selectedRegion),
+  const productsInRegion = useMemo(
+    () => products.filter((p) => p.region === selectedRegion),
     [selectedRegion, products]
   );
 
-  const productsToFilter = selectedProduct 
-    ? productsInRegion.filter((p: any) => p.id === selectedProduct)
+  const productsToFilter = selectedProduct
+    ? productsInRegion.filter((p) => p.id === selectedProduct)
     : productsInRegion;
 
   // Fetch anomalies on component mount and when filters change
@@ -47,7 +56,7 @@ export default function AnomalyView({ products = [] }: AnomalyViewProps) {
 
     try {
       // Prepare datapoints from filtered products
-      const datapoints: AnomalyDatapoint[] = productsToFilter.map((product: any) => ({
+      const datapoints: AnomalyDatapoint[] = productsToFilter.map((product) => ({
         timestamp: new Date().toISOString(),
         product_id: product.id,
         store_id: product.store || 'Global',
@@ -137,7 +146,7 @@ export default function AnomalyView({ products = [] }: AnomalyViewProps) {
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
           >
             <option value="">All products in region</option>
-            {productsInRegion.map((p: any) => (
+            {productsInRegion.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -232,8 +241,8 @@ export default function AnomalyView({ products = [] }: AnomalyViewProps) {
                             severity === 'critical'
                               ? 'bg-red-600'
                               : severity === 'warning'
-                              ? 'bg-yellow-600'
-                              : 'bg-blue-600'
+                                ? 'bg-yellow-600'
+                                : 'bg-blue-600'
                           }`}
                           style={{ width: `${anomaly.anomaly_score * 100}%` }}
                         ></div>

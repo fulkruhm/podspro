@@ -221,7 +221,12 @@ export const openApiSpec = {
         },
         responses: {
           '200': { description: 'Anomaly results' },
-          '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '400': {
+            description: 'Validation error',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+            },
+          },
           '503': { description: 'ML service unavailable' },
         },
       },

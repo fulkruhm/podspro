@@ -1,7 +1,7 @@
-
-import { GoogleGenAI, Chat, Type } from "@google/genai";
+import { GoogleGenAI, Chat, Type } from '@google/genai';
 import { getProducts, getRoutes } from '../db.js';
 import { loadAppConfig } from '../config/env.js';
+import type { FreightRoute, Product } from '../types.js';
 
 export type ModelTier = 'fast' | 'pro';
 type DemoChat = {
@@ -13,7 +13,8 @@ export type ChatLike = Chat | DemoChat;
 const appConfig = loadAppConfig();
 const FAST_MODEL = appConfig.geminiFastModel;
 const PRO_MODEL = appConfig.geminiProModel;
-const COMPLEX_QUERY_PATTERN = /(optimi|forecast|multi|portfolio|scenario|root cause|sensitivity|what-if|simulation|constraints|allocation|network)/i;
+const COMPLEX_QUERY_PATTERN =
+  /(optimi|forecast|multi|portfolio|scenario|root cause|sensitivity|what-if|simulation|constraints|allocation|network)/i;
 
 const SYSTEM_PROMPT = `
 # PODS (Predictive Order & Demand Solutions) AI Assistant
@@ -61,11 +62,97 @@ const extractText = (result: unknown): string => {
   return '';
 };
 
+const toString = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const toNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toNumberArray = (value: unknown): number[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => toNumber(item));
+};
+
+const toStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => String(item));
+};
+
+const toProductStatus = (value: unknown): Product['status'] => {
+  const status = toString(value).toLowerCase();
+  if (status === 'critical' || status === 'low' || status === 'excess' || status === 'optimal') {
+    return status;
+  }
+
+  return 'optimal';
+};
+
+const toTrend = (value: unknown): FreightRoute['trend'] => {
+  const trend = toString(value).toLowerCase();
+  if (trend === 'up' || trend === 'down' || trend === 'stable') {
+    return trend;
+  }
+
+  return 'stable';
+};
+
+const toCapacity = (value: unknown): FreightRoute['capacity'] => {
+  const capacity = toString(value).toLowerCase();
+  if (capacity === 'loose' || capacity === 'moderate' || capacity === 'tight') {
+    return capacity;
+  }
+
+  return 'moderate';
+};
+
+const toRiskLevel = (value: unknown): FreightRoute['riskLevel'] => {
+  const risk = toString(value).toLowerCase();
+  if (risk === 'low' || risk === 'medium' || risk === 'high') {
+    return risk;
+  }
+
+  return 'low';
+};
+
+const toHistoricalRates = (value: unknown): Array<{ date: string; rate: number }> => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return [];
+    }
+
+    const row = entry as Record<string, unknown>;
+    return [
+      {
+        date: toString(row.date),
+        rate: toNumber(row.rate),
+      },
+    ];
+  });
+};
+
 const invokeSendMessage = async (chat: Chat, message: string): Promise<unknown> => {
+  type ChatSender = {
+    sendMessage: (input: string | { message: string }) => Promise<unknown>;
+  };
+
+  const sender = chat as unknown as ChatSender;
+
   try {
-    return await (chat as any).sendMessage(message);
-  } catch (firstError) {
-    return await (chat as any).sendMessage({ message });
+    return await sender.sendMessage(message);
+  } catch {
+    return await sender.sendMessage({ message });
   }
 };
 
@@ -81,7 +168,7 @@ export const startChat = (
       _isDemoMode: true,
       sendMessage: async (_msg: string) => {
         return {
-          text: "Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.",
+          text: 'Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.',
         };
       },
     };
@@ -111,18 +198,21 @@ export const sendMessage = async (chat: ChatLike, message: string): Promise<stri
   try {
     // Handle demo mode
     if (isDemoChat(chat)) {
-      return "Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.";
+      return 'Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.';
     }
 
     const result = await invokeSendMessage(chat, message);
-    return extractText(result) || "No response from AI.";
+    return extractText(result) || 'No response from AI.';
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error('Gemini API Error:', error);
     if (error instanceof Error && /Requested entity was not found|model/i.test(error.message)) {
-        return "ERROR_MODEL_UNAVAILABLE";
+      return 'ERROR_MODEL_UNAVAILABLE';
     }
-    if (error instanceof Error && /API key|permission|unauthorized|forbidden/i.test(error.message)) {
-        return "ERROR_API_KEY_REQUIRED";
+    if (
+      error instanceof Error &&
+      /API key|permission|unauthorized|forbidden/i.test(error.message)
+    ) {
+      return 'ERROR_API_KEY_REQUIRED';
     }
     return "I'm sorry, I encountered an error processing your request.";
   }
@@ -135,7 +225,9 @@ export const streamMessage = async (
 ): Promise<void> => {
   try {
     if (isDemoChat(chat)) {
-      onChunk("Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.");
+      onChunk(
+        'Demo Mode: AI Advisor is in read-only mode without a valid GEMINI_API_KEY. To enable full AI capabilities, set your API key in the environment.'
+      );
       return;
     }
 
@@ -151,7 +243,7 @@ export const streamMessage = async (
           if (text) onChunk(text);
         }
         return;
-      } catch (streamError) {
+      } catch (_streamError) {
         console.warn('[geminiService] Streaming call failed, falling back to non-stream response');
       }
     }
@@ -168,49 +260,56 @@ export const streamMessage = async (
 
 export const fetchRealtimeData = async () => {
   const ai = getAI();
-  
+
   // If no API key, return current database data as fallback
   if (!ai) {
     console.log('[geminiService] fetchRealtimeData: No API key, returning database data');
     try {
       const products = await getProducts();
       const routes = await getRoutes();
-      
-      // Map database format to frontend format
-      const mappedProducts = products.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        currentStock: parseInt(p.current_stock) || 0,
-        avgDailyDemand: parseFloat(p.avg_daily_demand) || 0,
-        leadTime: p.lead_time || 0,
-        safetyStock: p.safety_stock || 0,
-        reorderPoint: p.reorder_point || 0,
-        status: p.status || 'optimal',
-        category: p.category || '',
-        price: parseFloat(p.price) || 0,
-        region: p.region || '',
-        store: p.store || '',
-        department: p.department || '',
-        historicalDemand: p.historical_demand,
-        imageUrl: p.image_url,
-        shrinkRate: parseFloat(p.shrink_rate) || 0,
-        markdownRate: parseFloat(p.markdown_rate) || 0,
-        oosDays: p.oos_days || 0,
-        turnoverRate: parseFloat(p.turnover_rate) || 0,
-        lastRestockDate: p.last_restock_date,
-        forecastedDemand: p.forecasted_demand,
-      }));
 
-      const mappedRoutes = routes.map((r: any) => ({
-        id: r.id,
-        origin: r.origin,
-        destination: r.destination,
-        currentRate: parseFloat(r.current_rate) || 0,
-        trend: (r.trend || 'stable'),
-        capacity: (r.capacity || 'moderate'),
-        riskLevel: (r.risk_level || 'low'),
-        historicalRates: r.historical_rates || [],
-      }));
+      // Map database format to frontend format
+      const mappedProducts: Product[] = products.map((row) => {
+        const p = row as Record<string, unknown>;
+        return {
+          id: toString(p.id),
+          name: toString(p.name),
+          currentStock: toNumber(p.current_stock),
+          avgDailyDemand: toNumber(p.avg_daily_demand),
+          leadTime: toNumber(p.lead_time),
+          safetyStock: toNumber(p.safety_stock),
+          reorderPoint: toNumber(p.reorder_point),
+          status: toProductStatus(p.status),
+          category: toString(p.category),
+          price: toNumber(p.price),
+          region: toString(p.region),
+          store: toString(p.store),
+          department: toString(p.department),
+          historicalDemand: toNumberArray(p.historical_demand),
+          imageUrl: toString(p.image_url),
+          shrinkRate: toNumber(p.shrink_rate),
+          markdownRate: toNumber(p.markdown_rate),
+          oosDays: toNumber(p.oos_days),
+          turnoverRate: toNumber(p.turnover_rate),
+          lastRestockDate: toString(p.last_restock_date),
+          forecastedDemand: toNumberArray(p.forecasted_demand),
+          forecastedExplainability: toStringArray(p.forecast_explainability),
+        };
+      });
+
+      const mappedRoutes: FreightRoute[] = routes.map((row) => {
+        const r = row as Record<string, unknown>;
+        return {
+          id: toString(r.id),
+          origin: toString(r.origin),
+          destination: toString(r.destination),
+          currentRate: toNumber(r.current_rate),
+          trend: toTrend(r.trend),
+          capacity: toCapacity(r.capacity),
+          riskLevel: toRiskLevel(r.risk_level),
+          historicalRates: toHistoricalRates(r.historical_rates),
+        };
+      });
 
       return {
         products: mappedProducts,
@@ -222,13 +321,14 @@ export const fetchRealtimeData = async () => {
       return null;
     }
   }
-  
+
   try {
     const response = await ai.models.generateContent({
       model: PRO_MODEL,
-      contents: "Generate a realistic supply chain scenario for a grocery retail chain. Create 15 products distributed across 3 regions (North, South, West), 5 different stores, and departments like Produce, Dairy, Bakery, Meat, Frozen, Beverages, and Pantry. Ensure no electronics or non-grocery items. Vary the stock levels to show a mix of optimal, low, excess, and critical statuses. IMPORTANT: For each product, provide 7 days of realistic historicalDemand, a relevant picsum.photos imageUrl, shrinkRate (0-10%), markdownRate (0-20%), oosDays (0-10), turnoverRate, and 7 days of forecastedDemand. For each route, provide 12 weeks of realistic historicalRates to enable trend visualization.",
+      contents:
+        'Generate a realistic supply chain scenario for a grocery retail chain. Create 15 products distributed across 3 regions (North, South, West), 5 different stores, and departments like Produce, Dairy, Bakery, Meat, Frozen, Beverages, and Pantry. Ensure no electronics or non-grocery items. Vary the stock levels to show a mix of optimal, low, excess, and critical statuses. IMPORTANT: For each product, provide 7 days of realistic historicalDemand, a relevant picsum.photos imageUrl, shrinkRate (0-10%), markdownRate (0-20%), oosDays (0-10), turnoverRate, and 7 days of forecastedDemand. For each route, provide 12 weeks of realistic historicalRates to enable trend visualization.',
       config: {
-        responseMimeType: "application/json",
+        responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -253,22 +353,45 @@ export const fetchRealtimeData = async () => {
                   historicalDemand: {
                     type: Type.ARRAY,
                     items: { type: Type.NUMBER },
-                    description: "Last 14 days of demand"
+                    description: 'Last 14 days of demand',
                   },
-                  imageUrl: { type: Type.STRING, description: "A picsum.photos URL with a relevant seed" },
-                  shrinkRate: { type: Type.NUMBER, description: "Percentage of inventory lost to shrink" },
-                  markdownRate: { type: Type.NUMBER, description: "Percentage of inventory marked down" },
-                  oosDays: { type: Type.NUMBER, description: "Days out of stock in last 30 days" },
+                  imageUrl: {
+                    type: Type.STRING,
+                    description: 'A picsum.photos URL with a relevant seed',
+                  },
+                  shrinkRate: {
+                    type: Type.NUMBER,
+                    description: 'Percentage of inventory lost to shrink',
+                  },
+                  markdownRate: {
+                    type: Type.NUMBER,
+                    description: 'Percentage of inventory marked down',
+                  },
+                  oosDays: { type: Type.NUMBER, description: 'Days out of stock in last 30 days' },
                   turnoverRate: { type: Type.NUMBER },
                   lastRestockDate: { type: Type.STRING },
                   forecastedDemand: {
                     type: Type.ARRAY,
                     items: { type: Type.NUMBER },
-                    description: "Next 7 days of forecasted demand"
-                  }
+                    description: 'Next 7 days of forecasted demand',
+                  },
                 },
-                required: ['id', 'name', 'currentStock', 'avgDailyDemand', 'leadTime', 'safetyStock', 'reorderPoint', 'status', 'category', 'price', 'region', 'store', 'department']
-              }
+                required: [
+                  'id',
+                  'name',
+                  'currentStock',
+                  'avgDailyDemand',
+                  'leadTime',
+                  'safetyStock',
+                  'reorderPoint',
+                  'status',
+                  'category',
+                  'price',
+                  'region',
+                  'store',
+                  'department',
+                ],
+              },
             },
             routes: {
               type: Type.ARRAY,
@@ -288,26 +411,34 @@ export const fetchRealtimeData = async () => {
                       type: Type.OBJECT,
                       properties: {
                         date: { type: Type.STRING },
-                        rate: { type: Type.NUMBER }
+                        rate: { type: Type.NUMBER },
                       },
-                      required: ['date', 'rate']
+                      required: ['date', 'rate'],
                     },
-                    description: "Past 12 weeks of rates"
-                  }
+                    description: 'Past 12 weeks of rates',
+                  },
                 },
-                required: ['id', 'origin', 'destination', 'currentRate', 'trend', 'capacity', 'riskLevel']
-              }
-            }
+                required: [
+                  'id',
+                  'origin',
+                  'destination',
+                  'currentRate',
+                  'trend',
+                  'capacity',
+                  'riskLevel',
+                ],
+              },
+            },
           },
-          required: ['products', 'routes']
-        }
-      }
+          required: ['products', 'routes'],
+        },
+      },
     });
 
     // Fix: Access text as a property
     return JSON.parse(response.text || '{}');
   } catch (error) {
-    console.error("Failed to fetch realtime data:", error);
+    console.error('Failed to fetch realtime data:', error);
     return null;
   }
 };

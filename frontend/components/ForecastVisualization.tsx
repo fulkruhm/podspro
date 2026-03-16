@@ -5,12 +5,29 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { forecastDemand, ForecastResult } from '../services/mlService';
 
+interface ForecastProduct {
+  id: string;
+  name?: string;
+  sku?: string;
+  region?: string;
+  avgDailyDemand?: number;
+}
+
 interface ForecastViewProps {
-  products?: any[];
+  products?: ForecastProduct[];
 }
 
 export default function ForecastView({ products = [] }: ForecastViewProps) {
@@ -22,33 +39,33 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
   const [forecastDays, setForecastDays] = useState(7);
 
   // Get unique regions and products
-  const regions = useMemo(() => 
-    [...new Set(products.map((p: any) => p.region).filter(Boolean))],
+  const regions = useMemo(
+    () => [...new Set(products.map((p) => p.region).filter(Boolean))],
     [products]
   );
 
-  const productsInRegion = useMemo(() => 
-    products.filter((p: any) => p.region === selectedRegion),
+  const productsInRegion = useMemo(
+    () => products.filter((p) => p.region === selectedRegion),
     [selectedRegion, products]
   );
 
-  const selectedProductData = products.find((p: any) => p.id === selectedProduct);
-  
+  const selectedProductData = products.find((p) => p.id === selectedProduct);
+
   // Aggregate historical demand for regional forecast (all products or filtered)
   const getRegionalHistoricalDemand = (days: number = 30) => {
     const aggregated: number[] = Array(days).fill(0);
-    
+
     const productsToAggregate = selectedProduct
-      ? productsInRegion.filter((p: any) => p.id === selectedProduct)
+      ? productsInRegion.filter((p) => p.id === selectedProduct)
       : productsInRegion;
-    
-    productsToAggregate.forEach((product: any) => {
+
+    productsToAggregate.forEach((product) => {
       for (let i = 0; i < days; i++) {
         const randomDemand = Math.floor(Math.random() * 30) + (product.avgDailyDemand || 15);
         aggregated[i] += randomDemand;
       }
     });
-    
+
     return aggregated;
   };
 
@@ -109,7 +126,10 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
         {/* Controls */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div>
-            <label htmlFor="region-select" className="block text-sm font-medium text-slate-700 mb-2">
+            <label
+              htmlFor="region-select"
+              className="block text-sm font-medium text-slate-700 mb-2"
+            >
               Select Region
             </label>
             <select
@@ -131,7 +151,10 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
           </div>
 
           <div>
-            <label htmlFor="product-select" className="block text-sm font-medium text-slate-700 mb-2">
+            <label
+              htmlFor="product-select"
+              className="block text-sm font-medium text-slate-700 mb-2"
+            >
               Filter by Product (Optional)
             </label>
             <select
@@ -204,9 +227,14 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
           {/* Forecast Type Info */}
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm font-medium text-blue-900">
-              🌍 <strong>Regional Aggregated</strong> forecast for <strong>{selectedRegion}</strong> region
+              🌍 <strong>Regional Aggregated</strong> forecast for <strong>{selectedRegion}</strong>{' '}
+              region
               {selectedProduct ? (
-                <> for product <strong>{selectedProductData?.name || selectedProductData?.sku}</strong></>
+                <>
+                  {' '}
+                  for product{' '}
+                  <strong>{selectedProductData?.name || selectedProductData?.sku}</strong>
+                </>
               ) : (
                 <> ({productsInRegion.length} products)</>
               )}
@@ -230,7 +258,10 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
             <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-600 font-medium">Demand Signal</p>
               <p className="text-lg font-bold text-blue-900 mt-1">
-                {Math.round(forecast.forecast.reduce((a, b) => a + b, 0) / forecast.forecast.length)} units
+                {Math.round(
+                  forecast.forecast.reduce((a, b) => a + b, 0) / forecast.forecast.length
+                )}{' '}
+                units
               </p>
             </div>
 
@@ -238,7 +269,8 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
             <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg">
               <p className="text-sm text-green-600 font-medium">Confidence Range</p>
               <p className="text-xs text-green-700 mt-1">
-                {Math.round(forecast.confidence_interval[0])} - {Math.round(forecast.confidence_interval[1])} units
+                {Math.round(forecast.confidence_interval[0])} -{' '}
+                {Math.round(forecast.confidence_interval[1])} units
               </p>
             </div>
           </div>
@@ -318,7 +350,9 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
                   {chartData.map((row, idx) => (
                     <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-2 text-slate-900">{row.day}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-blue-600">{row.demand}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-blue-600">
+                        {row.demand}
+                      </td>
                       <td className="px-4 py-2 text-right text-slate-600">{row.lower}</td>
                       <td className="px-4 py-2 text-right text-slate-600">{row.upper}</td>
                     </tr>
@@ -334,7 +368,9 @@ export default function ForecastView({ products = [] }: ForecastViewProps) {
         <div className="p-8 bg-slate-50 border border-slate-200 rounded-lg text-center">
           <TrendingUp className="w-12 h-12 text-slate-400 mx-auto mb-4" />
           <p className="text-slate-700 font-medium">Ready to forecast</p>
-          <p className="text-slate-600 text-sm">Click "Generate Forecast" to see demand predictions</p>
+          <p className="text-slate-600 text-sm">
+            Click "Generate Forecast" to see demand predictions
+          </p>
         </div>
       )}
     </div>

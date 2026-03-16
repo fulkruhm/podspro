@@ -1,10 +1,7 @@
-from typing import List
-
 import numpy as np
+from schemas import AnomalyResult, InventoryDatapoint
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
-
-from schemas import InventoryDatapoint, AnomalyResult
 
 
 class AnomalyDetector:
@@ -18,7 +15,7 @@ class AnomalyDetector:
         )
         self.scaler = StandardScaler()
 
-    def detect(self, datapoints: List[InventoryDatapoint]) -> List[AnomalyResult]:
+    def detect(self, datapoints: list[InventoryDatapoint]) -> list[AnomalyResult]:
         """Detect anomalies in inventory data using hybrid approach"""
         if not datapoints:
             return []
@@ -89,7 +86,7 @@ class AnomalyDetector:
     def _detect_rule_based(
         self,
         current: InventoryDatapoint,
-        history: List[InventoryDatapoint]
+        history: list[InventoryDatapoint]
     ) -> tuple:
         """Rule-based anomaly detection for immediate issues"""
 
@@ -105,9 +102,7 @@ class AnomalyDetector:
                 True,
                 0.95,
                 f"🚨 CRITICAL: Stock level ({current.current_stock}) critically low (avg: {avg_stock:.0f})",
-                "⚠️ EMERGENCY REORDER REQUIRED - Stock at only {:.0f}% of average".format(
-                    (current.current_stock / avg_stock * 100) if avg_stock > 0 else 0
-                )
+                f"⚠️ EMERGENCY REORDER REQUIRED - Stock at only {(current.current_stock / avg_stock * 100) if avg_stock > 0 else 0:.0f}% of average"
             )
 
         if avg_stock > 0 and current.current_stock > avg_stock * 2.5:
@@ -147,7 +142,7 @@ class AnomalyDetector:
     def _explain_anomaly(
         self,
         current: InventoryDatapoint,
-        history: List[InventoryDatapoint],
+        history: list[InventoryDatapoint],
         is_anomaly: bool,
         score: float
     ) -> tuple:

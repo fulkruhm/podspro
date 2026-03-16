@@ -29,6 +29,13 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
   onRefreshData,
 }) => {
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    return fallback;
+  };
 
   const [items, setItems] = React.useState<ForecastReviewItem[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -36,11 +43,15 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
   const [reviewTab, setReviewTab] = React.useState<'queue' | 'resolved'>('queue');
   const [storeFilter, setStoreFilter] = React.useState('');
   const [actionFilter, setActionFilter] = React.useState('');
-  const [sortBy, setSortBy] = React.useState<'score_desc' | 'score_asc' | 'bias_desc' | 'bias_asc'>('score_desc');
+  const [sortBy, setSortBy] = React.useState<'score_desc' | 'score_asc' | 'bias_desc' | 'bias_asc'>(
+    'score_desc'
+  );
   const [decisionLoadingKey, setDecisionLoadingKey] = React.useState<string | null>(null);
   const [batchRefreshing, setBatchRefreshing] = React.useState(false);
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [queueStats, setQueueStats] = React.useState<ForecastBatchQueueStatsResponse['queue'] | null>(null);
+  const [queueStats, setQueueStats] = React.useState<
+    ForecastBatchQueueStatsResponse['queue'] | null
+  >(null);
   const [failedQueueJobs, setFailedQueueJobs] = React.useState<ForecastBatchFailedJob[]>([]);
   const [queueLoading, setQueueLoading] = React.useState(false);
   const [retryingRunId, setRetryingRunId] = React.useState<number | null>(null);
@@ -54,8 +65,8 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
     try {
       const response = await getForecastReviewItems(userRole, 100);
       setItems(response.items || []);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load forecast review items');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load forecast review items'));
     } finally {
       setLoading(false);
     }
@@ -75,8 +86,8 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
       ]);
       setQueueStats(queueResponse.queue);
       setFailedQueueJobs(failedResponse.jobs || []);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load queue monitoring data');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load queue monitoring data'));
     } finally {
       setQueueLoading(false);
       queueRefreshInFlightRef.current = false;
@@ -117,13 +128,14 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
         productId: item.product_id,
         storeId: item.store_id,
         decision_status: decisionStatus,
-        baseline_adjustment_pct: decisionStatus === 'adjust_baseline' ? baselineAdjustmentPct : undefined,
+        baseline_adjustment_pct:
+          decisionStatus === 'adjust_baseline' ? baselineAdjustmentPct : undefined,
         notes: `Submitted from Forecast Review page. Bias ${Number(item.bias_pct).toFixed(1)}%, score ${Number(item.anomaly_score).toFixed(1)}.`,
       });
       await loadItems();
       await loadQueueMonitoring();
-    } catch (err: any) {
-      setError(err?.message || 'Failed to submit review decision');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to submit review decision'));
     } finally {
       setDecisionLoadingKey(null);
     }
@@ -166,11 +178,14 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
 
       await loadItems();
       await loadQueueMonitoring();
-      await Promise.resolve(onRefreshData?.()).catch((refreshError: any) => {
-        console.error('Global refresh after forecast batch trigger failed:', refreshError?.message || refreshError);
+      await Promise.resolve(onRefreshData?.()).catch((refreshError: unknown) => {
+        console.error(
+          'Global refresh after forecast batch trigger failed:',
+          getErrorMessage(refreshError, 'Unknown refresh error')
+        );
       });
-    } catch (err: any) {
-      setError(err?.message || 'Failed to refresh forecast data');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to refresh forecast data'));
     } finally {
       setBatchRefreshing(false);
     }
@@ -182,8 +197,8 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
     try {
       await retryForecastBatchRun(runId);
       await loadQueueMonitoring();
-    } catch (err: any) {
-      setError(err?.message || 'Failed to retry forecast batch run');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to retry forecast batch run'));
     } finally {
       setRetryingRunId(null);
     }
@@ -217,8 +232,13 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
     <div className="space-y-4 md:space-y-6">
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">Forecast Review (Admin)</h2>
-          <p className="text-[11px] text-slate-500 mt-1">Real anomaly queue from persisted demand + forecast data. Analyst decisions are recorded for audit.</p>
+          <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
+            Forecast Review (Admin)
+          </h2>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Real anomaly queue from persisted demand + forecast data. Analyst decisions are recorded
+            for audit.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -246,7 +266,9 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
 
       <div className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Forecast Queue Monitor</p>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            Forecast Queue Monitor
+          </p>
           <button
             onClick={loadQueueMonitoring}
             disabled={queueLoading}
@@ -279,7 +301,9 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
           </div>
           <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
             <p className="text-[10px] text-slate-500 uppercase tracking-wider">Completed</p>
-            <p className="text-sm font-bold text-emerald-700">{queueStats?.counts.completed ?? 0}</p>
+            <p className="text-sm font-bold text-emerald-700">
+              {queueStats?.counts.completed ?? 0}
+            </p>
           </div>
         </div>
 
@@ -298,8 +322,12 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
               {failedQueueJobs.map((job) => (
                 <tr key={job.jobId} className="border-t border-slate-200 text-slate-700">
                   <td className="py-2 pr-2 font-medium">{job.runId}</td>
-                  <td className="py-2 pr-2 max-w-[320px] truncate" title={job.failedReason}>{job.failedReason}</td>
-                  <td className="py-2 pr-2 text-right">{job.attemptsMade}/{job.attemptsConfigured}</td>
+                  <td className="py-2 pr-2 max-w-[320px] truncate" title={job.failedReason}>
+                    {job.failedReason}
+                  </td>
+                  <td className="py-2 pr-2 text-right">
+                    {job.attemptsMade}/{job.attemptsConfigured}
+                  </td>
                   <td className="py-2 pr-2">{new Date(job.timestamp).toLocaleString()}</td>
                   <td className="py-2">
                     <button
@@ -314,7 +342,9 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
               ))}
               {!queueLoading && failedQueueJobs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-3 text-slate-500 text-center">No failed queue jobs.</td>
+                  <td colSpan={5} className="py-3 text-slate-500 text-center">
+                    No failed queue jobs.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -324,7 +354,9 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
 
       <div className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Forecast Review Queue</p>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            Forecast Review Queue
+          </p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setReviewTab('queue')}
@@ -349,7 +381,9 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
           >
             <option value="">All Stores</option>
             {storeOptions.map((store) => (
-              <option key={store} value={store}>{store}</option>
+              <option key={store} value={store}>
+                {store}
+              </option>
             ))}
           </select>
           <select
@@ -365,7 +399,9 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
           </select>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'score_desc' | 'score_asc' | 'bias_desc' | 'bias_asc')}
+            onChange={(e) =>
+              setSortBy(e.target.value as 'score_desc' | 'score_asc' | 'bias_desc' | 'bias_asc')
+            }
             className="px-2 py-1 text-[11px] rounded-lg border border-slate-200 bg-white text-slate-700"
           >
             <option value="score_desc">Score ↓</option>
@@ -374,7 +410,8 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
             <option value="bias_asc">|Bias| ↑</option>
           </select>
           <div className="text-[11px] text-slate-600 flex items-center px-2">
-            Showing {displayedItems.length === 0 ? 0 : startIndex + 1}-{endIndex} of {displayedItems.length}
+            Showing {displayedItems.length === 0 ? 0 : startIndex + 1}-{endIndex} of{' '}
+            {displayedItems.length}
           </div>
         </div>
 
@@ -400,11 +437,18 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
               {pageItems.map((item) => {
                 const adjustPct = Number(item.bias_pct);
                 return (
-                  <tr key={`${item.product_id}:${item.store_id}`} className="border-t border-slate-200 text-slate-700">
+                  <tr
+                    key={`${item.product_id}:${item.store_id}`}
+                    className="border-t border-slate-200 text-slate-700"
+                  >
                     <td className="py-2 pr-2 font-medium">{item.product_name}</td>
                     <td className="py-2 pr-2">{item.store_id}</td>
-                    <td className="py-2 pr-2 text-right font-bold">{Number(item.bias_pct).toFixed(1)}%</td>
-                    <td className="py-2 pr-2 text-right">{Number(item.anomaly_score).toFixed(1)}</td>
+                    <td className="py-2 pr-2 text-right font-bold">
+                      {Number(item.bias_pct).toFixed(1)}%
+                    </td>
+                    <td className="py-2 pr-2 text-right">
+                      {Number(item.anomaly_score).toFixed(1)}
+                    </td>
                     <td className="py-2 pr-2">
                       <div>{item.recommended_action.replace('_', ' ')}</div>
                       {item.latest_decision_status && (
@@ -432,7 +476,13 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
                         Accept
                       </button>
                       <button
-                        onClick={() => handleSubmitDecision(item, 'adjust_baseline', Math.max(-50, Math.min(50, Number((-adjustPct).toFixed(1)))))}
+                        onClick={() =>
+                          handleSubmitDecision(
+                            item,
+                            'adjust_baseline',
+                            Math.max(-50, Math.min(50, Number((-adjustPct).toFixed(1))))
+                          )
+                        }
                         disabled={!!decisionLoadingKey}
                         className="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-60"
                       >
@@ -451,7 +501,12 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
               })}
               {!loading && displayedItems.length === 0 && (
                 <tr>
-                  <td colSpan={reviewTab === 'resolved' ? 8 : 6} className="py-3 text-slate-500 text-center">No review items for current tab/filters.</td>
+                  <td
+                    colSpan={reviewTab === 'resolved' ? 8 : 6}
+                    className="py-3 text-slate-500 text-center"
+                  >
+                    No review items for current tab/filters.
+                  </td>
                 </tr>
               )}
             </tbody>

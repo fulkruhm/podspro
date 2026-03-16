@@ -10,6 +10,17 @@ interface FetchAuditLogsOptions {
   userId?: string;
 }
 
+interface AuditLogApiRow {
+  id: string;
+  timestamp: number | string;
+  user_id?: string;
+  user_name?: string;
+  action: string;
+  details?: string;
+  category: AuditLog['category'];
+  severity: AuditLog['severity'];
+}
+
 function toQueryString(options: FetchAuditLogsOptions = {}) {
   const params = new URLSearchParams();
   if (options.limit !== undefined) params.set('limit', String(options.limit));
@@ -21,7 +32,7 @@ function toQueryString(options: FetchAuditLogsOptions = {}) {
   return query ? `?${query}` : '';
 }
 
-function mapAuditLog(raw: any): AuditLog {
+function mapAuditLog(raw: AuditLogApiRow): AuditLog {
   return {
     id: raw.id,
     timestamp: Number(raw.timestamp),
@@ -40,7 +51,7 @@ export async function fetchAuditLogs(options: FetchAuditLogsOptions = {}): Promi
     throw new Error(`Failed to fetch audit logs: ${response.status}`);
   }
   const data = await response.json();
-  return (data.logs || []).map(mapAuditLog);
+  return ((data.logs || []) as AuditLogApiRow[]).map(mapAuditLog);
 }
 
 export async function createAuditLogEvent(input: {
@@ -60,7 +71,7 @@ export async function createAuditLogEvent(input: {
   }
 
   const data = await response.json();
-  return mapAuditLog(data.log);
+  return mapAuditLog(data.log as AuditLogApiRow);
 }
 
 export async function exportAuditLogsCsv(options: FetchAuditLogsOptions = {}) {

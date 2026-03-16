@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List, Optional
 
 import numpy as np
 
@@ -8,7 +7,7 @@ class DemandForecaster:
     """Simple exponential smoothing + trend analysis forecaster"""
 
     @staticmethod
-    def _parse_feature_vector(feature: Optional[dict]) -> dict:
+    def _parse_feature_vector(feature: dict | None) -> dict:
         if not isinstance(feature, dict):
             return {
                 "promo_flag": False,
@@ -30,7 +29,7 @@ class DemandForecaster:
         }
 
     @staticmethod
-    def _parse_feature_date(date_value: Optional[str]) -> Optional[datetime]:
+    def _parse_feature_date(date_value: str | None) -> datetime | None:
         if not isinstance(date_value, str) or not date_value.strip():
             return None
         try:
@@ -39,7 +38,7 @@ class DemandForecaster:
             return None
 
     @staticmethod
-    def _estimate_calendar_effects(data: np.ndarray, parsed_features: List[dict]) -> dict:
+    def _estimate_calendar_effects(data: np.ndarray, parsed_features: list[dict]) -> dict:
         if len(parsed_features) != len(data):
             return {
                 "dow": {},
@@ -84,7 +83,7 @@ class DemandForecaster:
         }
 
     @staticmethod
-    def _estimate_feature_effects(data: np.ndarray, historical_features: List[dict]) -> dict:
+    def _estimate_feature_effects(data: np.ndarray, historical_features: list[dict]) -> dict:
         if len(historical_features) != len(data):
             return {
                 "promo_uplift": 0.12,
@@ -128,9 +127,9 @@ class DemandForecaster:
 
     @staticmethod
     def forecast(
-        historical_demand: List[float],
-        historical_features: Optional[List[dict]] = None,
-        future_features: Optional[List[dict]] = None,
+        historical_demand: list[float],
+        historical_features: list[dict] | None = None,
+        future_features: list[dict] | None = None,
         forecast_days: int = 7,
         alpha: float = 0.3
     ) -> tuple:
@@ -173,7 +172,7 @@ class DemandForecaster:
         ]
         calendar_effects = DemandForecaster._estimate_calendar_effects(data, parsed_historical_features)
 
-        feature_adjusted_forecast: List[float] = []
+        feature_adjusted_forecast: list[float] = []
         for idx, base_value in enumerate(future_forecast):
             day_feature = parsed_future_features[idx]
             multiplier = 1.0
@@ -197,8 +196,8 @@ class DemandForecaster:
         future_forecast = feature_adjusted_forecast
 
         std_dev = np.std(data)
-        confidence_lower: List[float] = []
-        confidence_upper: List[float] = []
+        confidence_lower: list[float] = []
+        confidence_upper: list[float] = []
         for idx, forecast_value in enumerate(future_forecast):
             day_feature = parsed_future_features[idx]
             uncertainty_multiplier = 1.0
@@ -224,7 +223,7 @@ class DemandForecaster:
         baseline_window = data[-7:] if len(data) >= 7 else data
         baseline_avg = float(np.mean(baseline_window)) if len(baseline_window) > 0 else 0.0
 
-        explainability: List[str] = []
+        explainability: list[str] = []
         for idx, forecast_value in enumerate(future_forecast):
             variance_pct = 0.0
             if baseline_avg > 0:
@@ -233,7 +232,7 @@ class DemandForecaster:
             day_feature = parsed_future_features[idx]
             lower_bound = confidence[0][idx]
             upper_bound = confidence[1][idx]
-            feature_signals: List[str] = []
+            feature_signals: list[str] = []
             if day_feature["promo_flag"]:
                 feature_signals.append(f"promo effect {feature_effects['promo_uplift'] * 100:+.0f}%")
             if day_feature["holiday_flag"]:

@@ -1,11 +1,9 @@
 from datetime import datetime
-from typing import List, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
-
 from anomaly import AnomalyDetector
 from config import AppSettings
+from fastapi import FastAPI, HTTPException
 from forecast import DemandForecaster
 from schemas import (
     AnomalyDetectionRequest,
@@ -34,7 +32,7 @@ def register_routes(app: FastAPI, settings: AppSettings) -> None:
             "timestamp": datetime.utcnow().isoformat()
         }
 
-    @app.post("/api/ml/anomalies/detect", response_model=List[AnomalyResult])
+    @app.post("/api/ml/anomalies/detect", response_model=list[AnomalyResult])
     async def detect_anomalies(request: AnomalyDetectionRequest):
         """
         Detect anomalies in inventory data using Isolation Forest
@@ -80,8 +78,8 @@ def register_routes(app: FastAPI, settings: AppSettings) -> None:
 
     @app.post("/api/ml/batch-analysis")
     async def batch_analysis(
-        anomalies_request: Optional[AnomalyDetectionRequest] = None,
-        forecasts: Optional[List[ForecastRequest]] = None
+        anomalies_request: AnomalyDetectionRequest | None = None,
+        forecasts: list[ForecastRequest] | None = None
     ):
         """
         Run multiple analyses in batch (anomalies + forecasts)

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+coverage/
+.venv/
+.pytest_cache/
+ml-service/__pycache__/
+backend/dist/
+frontend/dist/
+package-lock.json

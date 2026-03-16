@@ -48,12 +48,14 @@ if (appConfig.frontendUrl) {
   allowedOrigins.push(appConfig.frontendUrl);
 }
 
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'Idempotency-Key'],
-}));
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'Idempotency-Key'],
+  })
+);
 
 // Body parser with size limits
 app.use(express.json({ limit: '256kb' }));
@@ -168,32 +170,51 @@ mountApiRoutes('/api');
 mountApiRoutes('/api/v1');
 
 // Error handling middleware - never expose internal errors to client
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  const requestId = res.locals.requestId as string | undefined;
-  console.error(JSON.stringify({
-    level: 'error',
-    event: 'request.failed',
-    requestId,
-    message: err?.message || 'Unknown error',
-    stack: appConfig.nodeEnv === 'production' ? undefined : err?.stack,
-  }));
+interface HttpErrorLike {
+  status?: number;
+  message?: string;
+  stack?: string;
+}
 
-  // Don't expose internal error details to client
-  const status = err.status || 500;
-  const message = appConfig.nodeEnv === 'production'
-    ? 'Internal server error'
-    : err.message;
+function toHttpErrorLike(error: unknown): HttpErrorLike {
+  if (typeof error === 'object' && error !== null) {
+    return error as HttpErrorLike;
+  }
 
-  res.status(status).json({ error: message, requestId });
-});
+  return {};
+}
+app.use(
+  (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const httpError = toHttpErrorLike(err);
+    const message = httpError.message ?? 'Unknown error';
+    const requestId = res.locals.requestId as string | undefined;
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        event: 'request.failed',
+        requestId,
+        message,
+        stack: appConfig.nodeEnv === 'production' ? undefined : httpError.stack,
+      })
+    );
+
+    // Don't expose internal error details to client
+    const status = typeof httpError.status === 'number' ? httpError.status : 500;
+    const clientMessage = appConfig.nodeEnv === 'production' ? 'Internal server error' : message;
+
+    res.status(status).json({ error: clientMessage, requestId });
+  }
+);
 
 app.listen(PORT, () => {
-  console.log(JSON.stringify({
-    level: 'info',
-    event: 'backend.started',
-    port: PORT,
-    environment: appConfig.nodeEnv,
-  }));
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      event: 'backend.started',
+      port: PORT,
+      environment: appConfig.nodeEnv,
+    })
+  );
 
   initializeForecastBatchQueueProcessing().catch((error) => {
     console.error('Failed to initialize forecast batch queue worker:', error?.message || error);

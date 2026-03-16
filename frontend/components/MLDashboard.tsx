@@ -8,9 +8,10 @@ import { RefreshCw, Activity, Brain, AlertCircle } from 'lucide-react';
 import AnomalyVisualization from './AnomalyVisualization';
 import ForecastVisualization from './ForecastVisualization';
 import { checkMLHealth, MLServiceHealth } from '../services/mlService';
+import type { Product } from '../types';
 
 interface MLDashboardProps {
-  products?: any[];
+  products?: Product[];
 }
 
 export default function MLDashboard({ products = [] }: MLDashboardProps) {
@@ -53,8 +54,13 @@ export default function MLDashboard({ products = [] }: MLDashboardProps) {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">🌍 Regional Analytics</h1>
-          <p className="text-slate-600 mt-1">Monitor anomalies and forecasts across multiple stores in a region. Optimize network-wide inventory decisions.</p>
+          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
+            🌍 Regional Analytics
+          </h1>
+          <p className="text-slate-600 mt-1">
+            Monitor anomalies and forecasts across multiple stores in a region. Optimize
+            network-wide inventory decisions.
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -82,14 +88,14 @@ export default function MLDashboard({ products = [] }: MLDashboardProps) {
       {/* ML Service Status Card */}
       <div
         className={`p-4 rounded-lg border-l-4 ${
-          isMLServiceHealthy
-            ? 'bg-green-50 border-green-500'
-            : 'bg-red-50 border-red-500'
+          isMLServiceHealthy ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'
         }`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Activity className={`w-5 h-5 ${isMLServiceHealthy ? 'text-green-600' : 'text-red-600'}`} />
+            <Activity
+              className={`w-5 h-5 ${isMLServiceHealthy ? 'text-green-600' : 'text-red-600'}`}
+            />
             <div>
               <p className="font-semibold text-slate-900">ML Service Status</p>
               <p className={`text-sm ${isMLServiceHealthy ? 'text-green-700' : 'text-red-700'}`}>
@@ -149,9 +155,7 @@ export default function MLDashboard({ products = [] }: MLDashboardProps) {
 
       {/* Tab Content */}
       <div className="bg-white rounded-lg border border-slate-200 p-6">
-        {activeTab === 'anomalies' && (
-          <AnomalyVisualization products={products} />
-        )}
+        {activeTab === 'anomalies' && <AnomalyVisualization products={products} />}
 
         {activeTab === 'forecasts' && <ForecastVisualization products={products} />}
 
@@ -176,7 +180,9 @@ export default function MLDashboard({ products = [] }: MLDashboardProps) {
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-slate-600">Last Checked:</dt>
-                        <dd className="font-medium text-slate-900">{lastUpdate.toLocaleTimeString()}</dd>
+                        <dd className="font-medium text-slate-900">
+                          {lastUpdate.toLocaleTimeString()}
+                        </dd>
                       </div>
                     </dl>
                   </div>
@@ -196,14 +202,18 @@ export default function MLDashboard({ products = [] }: MLDashboardProps) {
                         <span className="text-green-600 font-bold mt-0.5">✓</span>
                         <div>
                           <p className="font-medium text-slate-900">Demand Forecasting</p>
-                          <p className="text-xs text-slate-600">Exponential smoothing with confidence intervals</p>
+                          <p className="text-xs text-slate-600">
+                            Exponential smoothing with confidence intervals
+                          </p>
                         </div>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-green-600 font-bold mt-0.5">✓</span>
                         <div>
                           <p className="font-medium text-slate-900">Batch Analysis</p>
-                          <p className="text-xs text-slate-600">Run multiple analyses in single request</p>
+                          <p className="text-xs text-slate-600">
+                            Run multiple analyses in single request
+                          </p>
                         </div>
                       </li>
                     </ul>
@@ -255,8 +265,9 @@ export default function MLDashboard({ products = [] }: MLDashboardProps) {
       {/* Help Text */}
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-sm text-blue-900">
-          <strong>💡 Tip:</strong> Use the Anomaly Detection tab to identify operational issues, Demand
-          Forecasting tab to plan inventory, and Service Status tab to monitor ML service health.
+          <strong>💡 Tip:</strong> Use the Anomaly Detection tab to identify operational issues,
+          Demand Forecasting tab to plan inventory, and Service Status tab to monitor ML service
+          health.
         </p>
       </div>
     </div>

@@ -88,7 +88,9 @@ export function signAuthToken(input: Omit<AuthTokenPayload, 'iat' | 'exp' | 'jti
   return signToken(input, 'access', getTokenTtlSeconds());
 }
 
-export function signRefreshToken(input: Omit<AuthTokenPayload, 'iat' | 'exp' | 'jti' | 'tokenType'>) {
+export function signRefreshToken(
+  input: Omit<AuthTokenPayload, 'iat' | 'exp' | 'jti' | 'tokenType'>
+) {
   return signToken(input, 'refresh', getRefreshTokenTtlSeconds());
 }
 
@@ -119,7 +121,14 @@ export function verifyAuthToken(token: string): AuthTokenPayload | null {
     }
 
     const payload = JSON.parse(base64UrlDecode(encodedPayload)) as AuthTokenPayload;
-    if (!payload.sub || !payload.username || !payload.role || !payload.exp || !payload.jti || !payload.tokenType) {
+    if (
+      !payload.sub ||
+      !payload.username ||
+      !payload.role ||
+      !payload.exp ||
+      !payload.jti ||
+      !payload.tokenType
+    ) {
       return null;
     }
 

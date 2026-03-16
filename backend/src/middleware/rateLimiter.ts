@@ -29,19 +29,24 @@ export function createRateLimiter(options: Partial<RateLimitOptions> = {}) {
   const store: RateLimitStore = {};
 
   // Cleanup old entries every 5 minutes
-  setInterval(() => {
-    const now = Date.now();
-    for (const key in store) {
-      if (store[key].resetTime < now) {
-        delete store[key];
+  setInterval(
+    () => {
+      const now = Date.now();
+      for (const key in store) {
+        if (store[key].resetTime < now) {
+          delete store[key];
+        }
       }
-    }
-  }, 5 * 60 * 1000);
+    },
+    5 * 60 * 1000
+  );
 
-  const keyGenerator = config.keyGenerator || ((req: Request) => {
-    // Use IP address as the key
-    return (req.ip || req.socket.remoteAddress || 'unknown') as string;
-  });
+  const keyGenerator =
+    config.keyGenerator ||
+    ((req: Request) => {
+      // Use IP address as the key
+      return (req.ip || req.socket.remoteAddress || 'unknown') as string;
+    });
 
   return (req: Request, res: Response, next: NextFunction) => {
     const key = keyGenerator(req);

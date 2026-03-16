@@ -1,6 +1,5 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
-import { Product } from "../types.js";
+import { GoogleGenAI, Type } from '@google/genai';
+import { Product } from '../types.js';
 import { loadAppConfig } from '../config/env.js';
 
 export interface InventoryAnomaly {
@@ -94,14 +93,15 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
 
     const severeCoverageThreshold = Math.max(1, leadTime * 0.65);
     const stockoutThreshold = Math.max(1, leadTime * 0.85);
-    const isStockoutRisk = demand > 0 && (
-      isCriticalStatus ||
-      stockCoverageDays <= stockoutThreshold ||
-      (stock <= reorderPoint * 0.7 && stockCoverageDays <= leadTime + 1)
-    );
+    const isStockoutRisk =
+      demand > 0 &&
+      (isCriticalStatus ||
+        stockCoverageDays <= stockoutThreshold ||
+        (stock <= reorderPoint * 0.7 && stockCoverageDays <= leadTime + 1));
 
     if (isStockoutRisk) {
-      const severity: InventoryAnomaly['severity'] = isCriticalStatus || stockCoverageDays <= severeCoverageThreshold ? 'high' : 'medium';
+      const severity: InventoryAnomaly['severity'] =
+        isCriticalStatus || stockCoverageDays <= severeCoverageThreshold ? 'high' : 'medium';
       const deficit = Math.max(0, leadTime - stockCoverageDays);
       const score = (severity === 'high' ? 140 : 95) + deficit * 10;
       anomalies.push({
@@ -111,20 +111,22 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
         type: 'stockout_risk',
         severity,
         description: `Current stock (${Math.round(stock)}) covers about ${stockCoverageDays.toFixed(1)} days vs lead time ${leadTime} days.`,
-        recommendation: 'Place replenishment order now and prioritize inbound allocation to avoid stockout.',
+        recommendation:
+          'Place replenishment order now and prioritize inbound allocation to avoid stockout.',
         score,
       });
     }
 
     const overstockThresholdDays = Math.max(leadTime + 18, 28);
     const extremeOverstockThresholdDays = Math.max(leadTime + 24, 45);
-    const isOverstock = demand > 0 && (
-      (product.status === 'excess' && stockCoverageDays >= overstockThresholdDays) ||
-      stockCoverageDays >= extremeOverstockThresholdDays
-    );
+    const isOverstock =
+      demand > 0 &&
+      ((product.status === 'excess' && stockCoverageDays >= overstockThresholdDays) ||
+        stockCoverageDays >= extremeOverstockThresholdDays);
 
     if (isOverstock) {
-      const severity: InventoryAnomaly['severity'] = stockCoverageDays >= Math.max(extremeOverstockThresholdDays, 60) ? 'high' : 'medium';
+      const severity: InventoryAnomaly['severity'] =
+        stockCoverageDays >= Math.max(extremeOverstockThresholdDays, 60) ? 'high' : 'medium';
       const score = (severity === 'high' ? 120 : 85) + (stockCoverageDays - overstockThresholdDays);
       anomalies.push({
         productId: product.id,
@@ -133,7 +135,8 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
         type: 'overstock',
         severity,
         description: `Stock coverage is ${stockCoverageDays.toFixed(1)} days, above target ${overstockThresholdDays} days.`,
-        recommendation: 'Slow reorders, accelerate markdown/promotions, or rebalance stock to faster-moving stores.',
+        recommendation:
+          'Slow reorders, accelerate markdown/promotions, or rebalance stock to faster-moving stores.',
         score,
       });
     }
@@ -154,14 +157,21 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
           type: 'demand_spike',
           severity,
           description: `Recent demand is ${((recent / baseline - 1) * 100).toFixed(0)}% above the prior baseline.`,
-          recommendation: 'Raise reorder point temporarily and monitor next deliveries for potential demand regime shift.',
+          recommendation:
+            'Raise reorder point temporarily and monitor next deliveries for potential demand regime shift.',
           score,
         });
       }
     }
 
-    if (leadTime >= 10 && demand > 0 && (isLowStatus || isCriticalStatus) && stockCoverageDays < leadTime * 0.85) {
-      const severity: InventoryAnomaly['severity'] = stockCoverageDays < leadTime * 0.65 ? 'high' : 'medium';
+    if (
+      leadTime >= 10 &&
+      demand > 0 &&
+      (isLowStatus || isCriticalStatus) &&
+      stockCoverageDays < leadTime * 0.85
+    ) {
+      const severity: InventoryAnomaly['severity'] =
+        stockCoverageDays < leadTime * 0.65 ? 'high' : 'medium';
       const score = (severity === 'high' ? 115 : 78) + (leadTime - stockCoverageDays) * 4;
       anomalies.push({
         productId: product.id,
@@ -170,7 +180,8 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
         type: 'supply_delay',
         severity,
         description: `Long lead time (${leadTime} days) with limited stock coverage (${stockCoverageDays.toFixed(1)} days).`,
-        recommendation: 'Escalate supplier ETA, expedite shipment where possible, and prepare substitution plan.',
+        recommendation:
+          'Escalate supplier ETA, expedite shipment where possible, and prepare substitution plan.',
         score,
       });
     }
@@ -182,7 +193,8 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
     if (
       !existing ||
       anomaly.score > existing.score ||
-      (anomaly.score === existing.score && SEVERITY_ORDER[anomaly.severity] < SEVERITY_ORDER[existing.severity])
+      (anomaly.score === existing.score &&
+        SEVERITY_ORDER[anomaly.severity] < SEVERITY_ORDER[existing.severity])
     ) {
       perProductBest.set(anomaly.productId, anomaly);
     }
@@ -199,22 +211,25 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
   });
 
   const dynamicLimit = Math.ceil(products.length * 0.3);
-  const resultLimit = Math.max(LOCAL_FALLBACK_MIN_RESULTS, Math.min(LOCAL_FALLBACK_MAX_RESULTS, dynamicLimit));
+  const resultLimit = Math.max(
+    LOCAL_FALLBACK_MIN_RESULTS,
+    Math.min(LOCAL_FALLBACK_MAX_RESULTS, dynamicLimit)
+  );
 
-  return sorted.slice(0, resultLimit).map(({ score, ...anomaly }) => anomaly);
+  return sorted.slice(0, resultLimit).map(({ score: _score, ...anomaly }) => anomaly);
 };
 
 export async function detectInventoryAnomalies(products: Product[]): Promise<InventoryAnomaly[]> {
   const apiKey = appConfig.geminiApiKey;
   if (!apiKey) {
-    console.warn("[anomalyService] GEMINI_API_KEY not set. Falling back to local anomaly rules.");
+    console.warn('[anomalyService] GEMINI_API_KEY not set. Falling back to local anomaly rules.');
     return detectAnomaliesLocally(products);
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  
+
   // Prepare a condensed version of products to save tokens and focus on relevant data
-  const productData = products.map(p => ({
+  const productData = products.map((p) => ({
     id: p.id,
     name: p.name,
     store: p.store,
@@ -223,7 +238,7 @@ export async function detectInventoryAnomalies(products: Product[]): Promise<Inv
     rop: p.reorderPoint,
     leadTime: p.leadTime,
     status: p.status,
-    historical: p.historicalDemand?.slice(-7) || []
+    historical: p.historicalDemand?.slice(-7) || [],
   }));
 
   const prompt = `
@@ -243,7 +258,7 @@ export async function detectInventoryAnomalies(products: Product[]): Promise<Inv
       model: GEMINI_MODEL,
       contents: prompt,
       config: {
-        responseMimeType: "application/json",
+        responseMimeType: 'application/json',
         responseSchema: {
           type: Type.ARRAY,
           items: {
@@ -252,21 +267,29 @@ export async function detectInventoryAnomalies(products: Product[]): Promise<Inv
               productId: { type: Type.STRING },
               productName: { type: Type.STRING },
               storeName: { type: Type.STRING },
-              type: { 
-                type: Type.STRING, 
-                enum: ['stockout_risk', 'overstock', 'demand_spike', 'supply_delay'] 
+              type: {
+                type: Type.STRING,
+                enum: ['stockout_risk', 'overstock', 'demand_spike', 'supply_delay'],
               },
-              severity: { 
-                type: Type.STRING, 
-                enum: ['high', 'medium', 'low'] 
+              severity: {
+                type: Type.STRING,
+                enum: ['high', 'medium', 'low'],
               },
               description: { type: Type.STRING },
-              recommendation: { type: Type.STRING }
+              recommendation: { type: Type.STRING },
             },
-            required: ["productId", "productName", "storeName", "type", "severity", "description", "recommendation"]
-          }
-        }
-      }
+            required: [
+              'productId',
+              'productName',
+              'storeName',
+              'type',
+              'severity',
+              'description',
+              'recommendation',
+            ],
+          },
+        },
+      },
     });
 
     const text = response.text;
@@ -276,7 +299,9 @@ export async function detectInventoryAnomalies(products: Product[]): Promise<Inv
 
     const parsedArray = extractJsonArray(text);
     if (!parsedArray) {
-      console.warn('[anomalyService] AI response was not valid JSON array. Falling back to local rules.');
+      console.warn(
+        '[anomalyService] AI response was not valid JSON array. Falling back to local rules.'
+      );
       return detectAnomaliesLocally(products);
     }
 
@@ -288,9 +313,11 @@ export async function detectInventoryAnomalies(products: Product[]): Promise<Inv
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (/CONSUMER_SUSPENDED|PERMISSION_DENIED|forbidden|unauthorized|suspended/i.test(message)) {
-      console.warn('[anomalyService] Gemini access denied/suspended. Using local anomaly detection fallback.');
+      console.warn(
+        '[anomalyService] Gemini access denied/suspended. Using local anomaly detection fallback.'
+      );
     } else {
-      console.error("Error detecting anomalies via Gemini. Using local fallback:", error);
+      console.error('Error detecting anomalies via Gemini. Using local fallback:', error);
     }
     return detectAnomaliesLocally(products);
   }

@@ -2,7 +2,47 @@ import { AddressInfo } from 'net';
 import express from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const refreshTokenStore = new Map<string, any>();
+interface RefreshTokenRecord {
+  token_id: string;
+  user_id: string;
+  username: string;
+  expires_at: string;
+  revoked_at: string | null;
+  replaced_by_token_id: string | null;
+}
+
+interface StoreRefreshTokenInput {
+  tokenId: string;
+  userId: string;
+  username: string;
+  expiresAtIso: string;
+}
+
+interface RevokeAccessTokenInput {
+  tokenId: string;
+}
+
+interface AuthApiResponse {
+  token: string;
+  refreshToken: string;
+  user: {
+    username: string;
+    role: string;
+  };
+}
+
+interface ValidateApiResponse {
+  valid: boolean;
+  user: {
+    role: string;
+  };
+}
+
+interface ErrorApiResponse {
+  error: string;
+}
+
+const refreshTokenStore = new Map<string, RefreshTokenRecord>();
 const revokedAccessTokens = new Set<string>();
 
 vi.mock('../../db.js', () => ({
@@ -24,16 +64,18 @@ vi.mock('../../db.js', () => ({
       is_locked: false,
     };
   }),
-  storeRefreshToken: vi.fn(async ({ tokenId, userId, username, expiresAtIso }: any) => {
-    refreshTokenStore.set(tokenId, {
-      token_id: tokenId,
-      user_id: userId,
-      username,
-      expires_at: expiresAtIso,
-      revoked_at: null,
-      replaced_by_token_id: null,
-    });
-  }),
+  storeRefreshToken: vi.fn(
+    async ({ tokenId, userId, username, expiresAtIso }: StoreRefreshTokenInput) => {
+      refreshTokenStore.set(tokenId, {
+        token_id: tokenId,
+        user_id: userId,
+        username,
+        expires_at: expiresAtIso,
+        revoked_at: null,
+        replaced_by_token_id: null,
+      });
+    }
+  ),
   getRefreshTokenRecord: vi.fn(async (tokenId: string) => {
     return refreshTokenStore.get(tokenId) ?? null;
   }),
@@ -45,7 +87,7 @@ vi.mock('../../db.js', () => ({
       refreshTokenStore.set(tokenId, record);
     }
   }),
-  revokeAccessToken: vi.fn(async ({ tokenId }: any) => {
+  revokeAccessToken: vi.fn(async ({ tokenId }: RevokeAccessTokenInput) => {
     revokedAccessTokens.add(tokenId);
   }),
   isAccessTokenRevoked: vi.fn(async (tokenId: string) => {
@@ -93,7 +135,7 @@ describe('auth routes token contract', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json() as any;
+    const payload = (await response.json()) as AuthApiResponse;
     expect(typeof payload.token).toBe('string');
     expect(payload.token.split('.')).toHaveLength(3);
     expect(typeof payload.refreshToken).toBe('string');
@@ -107,7 +149,7 @@ describe('auth routes token contract', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin-pass' }),
     });
-    const loginPayload = await loginResponse.json() as any;
+    const loginPayload = (await loginResponse.json()) as AuthApiResponse;
 
     const refreshResponse = await fetch(`${baseUrl}/api/auth/refresh`, {
       method: 'POST',
@@ -116,7 +158,7 @@ describe('auth routes token contract', () => {
     });
 
     expect(refreshResponse.status).toBe(200);
-    const refreshPayload = await refreshResponse.json() as any;
+    const refreshPayload = (await refreshResponse.json()) as AuthApiResponse;
     expect(typeof refreshPayload.token).toBe('string');
     expect(typeof refreshPayload.refreshToken).toBe('string');
     expect(refreshPayload.refreshToken).not.toBe(loginPayload.refreshToken);
@@ -128,7 +170,7 @@ describe('auth routes token contract', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin-pass' }),
     });
-    const loginPayload = await loginResponse.json() as any;
+    const loginPayload = (await loginResponse.json()) as AuthApiResponse;
 
     const logoutResponse = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',
@@ -154,7 +196,7 @@ describe('auth routes token contract', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin-pass' }),
     });
-    const loginPayload = await login.json() as any;
+    const loginPayload = (await login.json()) as AuthApiResponse;
 
     const validateResponse = await fetch(`${baseUrl}/api/auth/validate`, {
       headers: {
@@ -163,7 +205,7 @@ describe('auth routes token contract', () => {
     });
 
     expect(validateResponse.status).toBe(200);
-    const validatePayload = await validateResponse.json() as any;
+    const validatePayload = (await validateResponse.json()) as ValidateApiResponse;
     expect(validatePayload.valid).toBe(true);
     expect(validatePayload.user.role).toBe('admin');
   });
@@ -171,7 +213,7 @@ describe('auth routes token contract', () => {
   it('rejects token validation when authorization is missing', async () => {
     const response = await fetch(`${baseUrl}/api/auth/validate`);
     expect(response.status).toBe(401);
-    const payload = await response.json() as any;
+    const payload = (await response.json()) as ErrorApiResponse;
     expect(payload.error).toContain('Authentication required');
   });
 });

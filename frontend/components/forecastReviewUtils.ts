@@ -13,16 +13,15 @@ export function getDisplayedReviewItems(
 ): ForecastReviewItem[] {
   const { reviewTab, storeFilter, actionFilter, sortBy } = options;
 
-  const baseItems = items.filter((item) => (
+  const baseItems = items.filter((item) =>
     reviewTab === 'queue' ? !item.latest_decision_status : !!item.latest_decision_status
-  ));
+  );
 
   const filtered = baseItems.filter((item) => {
     if (storeFilter && item.store_id !== storeFilter) return false;
     if (actionFilter) {
-      const actionToCompare = reviewTab === 'queue'
-        ? item.recommended_action
-        : (item.latest_decision_status || '');
+      const actionToCompare =
+        reviewTab === 'queue' ? item.recommended_action : item.latest_decision_status || '';
       if (actionToCompare !== actionFilter) return false;
     }
     return true;

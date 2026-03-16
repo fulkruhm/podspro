@@ -26,16 +26,18 @@ export function attachRequestContext(req: Request, res: Response, next: NextFunc
     logged = true;
 
     const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
-    console.log(JSON.stringify({
-      level: 'info',
-      event: 'request.completed',
-      requestId,
-      method: req.method,
-      path: req.originalUrl,
-      statusCode: res.statusCode,
-      durationMs: Number(durationMs.toFixed(2)),
-      ip: req.ip,
-    }));
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        event: 'request.completed',
+        requestId,
+        method: req.method,
+        path: req.originalUrl,
+        statusCode: res.statusCode,
+        durationMs: Number(durationMs.toFixed(2)),
+        ip: req.ip,
+      })
+    );
   };
 
   res.on('finish', logCompletion);

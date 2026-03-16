@@ -38,45 +38,128 @@ export interface FreightRoute {
   historicalRates?: { date: string; rate: number }[];
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function toString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toNumberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => toNumber(item));
+}
+
+function toHistoricalRates(value: unknown): Array<{ date: string; rate: number }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return [];
+    }
+
+    const row = entry as Record<string, unknown>;
+    return [
+      {
+        date: toString(row.date),
+        rate: toNumber(row.rate),
+      },
+    ];
+  });
+}
+
+function toProductStatus(value: unknown): Product['status'] {
+  const status = toString(value).toLowerCase();
+  if (status === 'optimal' || status === 'low' || status === 'excess' || status === 'critical') {
+    return status;
+  }
+
+  return 'optimal';
+}
+
+function toTrend(value: unknown): FreightRoute['trend'] {
+  const trend = toString(value).toLowerCase();
+  if (trend === 'up' || trend === 'down' || trend === 'stable') {
+    return trend;
+  }
+
+  return 'stable';
+}
+
+function toCapacity(value: unknown): FreightRoute['capacity'] {
+  const capacity = toString(value).toLowerCase();
+  if (capacity === 'loose' || capacity === 'moderate' || capacity === 'tight') {
+    return capacity;
+  }
+
+  return 'moderate';
+}
+
+function toRiskLevel(value: unknown): FreightRoute['riskLevel'] {
+  const risk = toString(value).toLowerCase();
+  if (risk === 'low' || risk === 'medium' || risk === 'high') {
+    return risk;
+  }
+
+  return 'low';
+}
+
 // Map database snake_case product to frontend camelCase
-function mapProductFromDB(dbProduct: any): Product {
+function mapProductFromDB(dbProductRaw: unknown): Product {
+  const dbProduct = toRecord(dbProductRaw);
+
   return {
-    id: dbProduct.id,
-    name: dbProduct.name,
-    currentStock: parseInt(dbProduct.current_stock) || 0,
-    avgDailyDemand: parseFloat(dbProduct.avg_daily_demand) || 0,
-    leadTime: dbProduct.lead_time || 0,
-    safetyStock: dbProduct.safety_stock || 0,
-    reorderPoint: dbProduct.reorder_point || 0,
-    status: dbProduct.status || 'optimal',
-    category: dbProduct.category || '',
-    price: parseFloat(dbProduct.price) || 0,
-    region: dbProduct.region || '',
-    store: dbProduct.store || '',
-    department: dbProduct.department || '',
-    historicalDemand: dbProduct.historical_demand,
-    imageUrl: dbProduct.image_url,
-    shrinkRate: parseFloat(dbProduct.shrink_rate) || 0,
-    markdownRate: parseFloat(dbProduct.markdown_rate) || 0,
-    oosDays: dbProduct.oos_days || 0,
-    turnoverRate: parseFloat(dbProduct.turnover_rate) || 0,
-    lastRestockDate: dbProduct.last_restock_date,
-    forecastedDemand: dbProduct.forecasted_demand,
-    forecastedExplainability: dbProduct.forecast_explainability,
+    id: toString(dbProduct.id),
+    name: toString(dbProduct.name),
+    currentStock: toNumber(dbProduct.current_stock),
+    avgDailyDemand: toNumber(dbProduct.avg_daily_demand),
+    leadTime: toNumber(dbProduct.lead_time),
+    safetyStock: toNumber(dbProduct.safety_stock),
+    reorderPoint: toNumber(dbProduct.reorder_point),
+    status: toProductStatus(dbProduct.status),
+    category: toString(dbProduct.category),
+    price: toNumber(dbProduct.price),
+    region: toString(dbProduct.region),
+    store: toString(dbProduct.store),
+    department: toString(dbProduct.department),
+    historicalDemand: toNumberArray(dbProduct.historical_demand),
+    imageUrl: toString(dbProduct.image_url),
+    shrinkRate: toNumber(dbProduct.shrink_rate),
+    markdownRate: toNumber(dbProduct.markdown_rate),
+    oosDays: toNumber(dbProduct.oos_days),
+    turnoverRate: toNumber(dbProduct.turnover_rate),
+    lastRestockDate: toString(dbProduct.last_restock_date),
+    forecastedDemand: toNumberArray(dbProduct.forecasted_demand),
+    forecastedExplainability: Array.isArray(dbProduct.forecast_explainability)
+      ? dbProduct.forecast_explainability.map((item) => String(item))
+      : [],
   };
 }
 
 // Map database snake_case route to frontend camelCase
-function mapRouteFromDB(dbRoute: any): FreightRoute {
+function mapRouteFromDB(dbRouteRaw: unknown): FreightRoute {
+  const dbRoute = toRecord(dbRouteRaw);
+
   return {
-    id: dbRoute.id,
-    origin: dbRoute.origin,
-    destination: dbRoute.destination,
-    currentRate: parseFloat(dbRoute.current_rate) || 0,
-    trend: (dbRoute.trend || 'stable') as 'up' | 'down' | 'stable',
-    capacity: (dbRoute.capacity || 'moderate') as 'loose' | 'moderate' | 'tight',
-    riskLevel: (dbRoute.risk_level || 'low') as 'low' | 'medium' | 'high',
-    historicalRates: dbRoute.historical_rates,
+    id: toString(dbRoute.id),
+    origin: toString(dbRoute.origin),
+    destination: toString(dbRoute.destination),
+    currentRate: toNumber(dbRoute.current_rate),
+    trend: toTrend(dbRoute.trend),
+    capacity: toCapacity(dbRoute.capacity),
+    riskLevel: toRiskLevel(dbRoute.risk_level),
+    historicalRates: toHistoricalRates(dbRoute.historical_rates),
   };
 }
 
@@ -116,7 +199,10 @@ export async function fetchRoutes(): Promise<FreightRoute[]> {
   }
 }
 
-export async function updateProduct(id: string, updates: Partial<Product>): Promise<Product | null> {
+export async function updateProduct(
+  id: string,
+  updates: Partial<Product>
+): Promise<Product | null> {
   try {
     const response = await authFetch(`${appConfig.apiBaseUrl}/data/products/${id}`, {
       method: 'PUT',

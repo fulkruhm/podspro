@@ -16,24 +16,36 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY = 1000; // 1 second
 
+interface RetryableError extends Error {
+  status?: number;
+  retryAfter?: number | string;
+}
+
+function toRetryableError(error: unknown): RetryableError {
+  if (error instanceof Error) {
+    return error as RetryableError;
+  }
+
+  const wrapped = new Error(String(error)) as RetryableError;
+  return wrapped;
+}
+
 /**
  * Exponential backoff retry decorator
  */
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries = MAX_RETRIES
-): Promise<T> {
-  let lastError: Error;
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = MAX_RETRIES): Promise<T> {
+  let lastError: RetryableError = new Error('Unknown retry failure');
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
-      lastError = error;
+    } catch (error: unknown) {
+      const retryableError = toRetryableError(error);
+      lastError = retryableError;
 
       // Check if it's a rate limit error (429)
-      if (error.status === 429 || error.message?.includes('Too many requests')) {
-        const retryAfter = error.retryAfter || Math.pow(2, attempt) * BASE_RETRY_DELAY;
+      if (retryableError.status === 429 || retryableError.message?.includes('Too many requests')) {
+        const retryAfter = retryableError.retryAfter || Math.pow(2, attempt) * BASE_RETRY_DELAY;
         const delayMs = typeof retryAfter === 'string' ? parseInt(retryAfter) : retryAfter;
 
         console.warn(
@@ -45,7 +57,7 @@ async function retryWithBackoff<T>(
       }
 
       // Don't retry on other errors
-      throw error;
+      throw retryableError;
     }
   }
 
@@ -178,7 +190,11 @@ export interface ForecastReviewItem {
   bias_pct: number;
   anomaly_score: number;
   recommended_action: 'accept_model' | 'adjust_baseline' | 'flag_data_issue' | 'request_override';
-  latest_decision_status?: 'accept_model' | 'adjust_baseline' | 'flag_data_issue' | 'request_override';
+  latest_decision_status?:
+    | 'accept_model'
+    | 'adjust_baseline'
+    | 'flag_data_issue'
+    | 'request_override';
   latest_baseline_adjustment_pct?: number;
   latest_notes?: string;
   latest_decided_by?: string;
@@ -262,9 +278,7 @@ export async function detectAnomalies(
 /**
  * Forecast future demand with caching and retry logic
  */
-export async function forecastDemand(
-  request: ForecastRequest
-): Promise<ForecastResult> {
+export async function forecastDemand(request: ForecastRequest): Promise<ForecastResult> {
   // Generate cache key
   const cacheKey = `${request.product_id}:${request.store_id}:${request.forecast_days || 7}`;
 
@@ -291,9 +305,9 @@ export async function forecastDemand(
     // Parse error response to extract rate limit info
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const error = new Error(`Forecast failed: ${JSON.stringify(errorData)}`);
-      (error as any).status = response.status;
-      (error as any).retryAfter = errorData.retryAfter;
+      const error = new Error(`Forecast failed: ${JSON.stringify(errorData)}`) as RetryableError;
+      error.status = response.status;
+      error.retryAfter = (errorData as { retryAfter?: number | string }).retryAfter;
       throw error;
     }
 
@@ -394,15 +408,18 @@ export async function getForecastReviewItems(
   _userRole: string,
   limit = 50
 ): Promise<ForecastReviewItemsResponse> {
-  const response = await authFetch(`${ML_API_BASE}/forecast/review-items?limit=${encodeURIComponent(String(limit))}&_=${Date.now()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-    },
-    cache: 'no-store',
-  });
+  const response = await authFetch(
+    `${ML_API_BASE}/forecast/review-items?limit=${encodeURIComponent(String(limit))}&_=${Date.now()}`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+      cache: 'no-store',
+    }
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -423,15 +440,18 @@ export async function submitForecastReviewDecision(
     notes?: string;
   }
 ): Promise<ForecastReviewDecisionResponse> {
-  const response = await authFetch(`${ML_API_BASE}/forecast/review-items/${encodeURIComponent(input.productId)}/${encodeURIComponent(input.storeId)}/decision`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      decision_status: input.decision_status,
-      baseline_adjustment_pct: input.baseline_adjustment_pct,
-      notes: input.notes,
-    }),
-  });
+  const response = await authFetch(
+    `${ML_API_BASE}/forecast/review-items/${encodeURIComponent(input.productId)}/${encodeURIComponent(input.storeId)}/decision`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision_status: input.decision_status,
+        baseline_adjustment_pct: input.baseline_adjustment_pct,
+        notes: input.notes,
+      }),
+    }
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -455,11 +475,16 @@ export async function getForecastBatchQueueStats(): Promise<ForecastBatchQueueSt
   return await response.json();
 }
 
-export async function getForecastBatchFailedJobs(limit = 20): Promise<ForecastBatchFailedJobsResponse> {
-  const response = await authFetch(`${ML_API_BASE}/forecast/batch/failed-jobs?limit=${encodeURIComponent(String(limit))}`, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-  });
+export async function getForecastBatchFailedJobs(
+  limit = 20
+): Promise<ForecastBatchFailedJobsResponse> {
+  const response = await authFetch(
+    `${ML_API_BASE}/forecast/batch/failed-jobs?limit=${encodeURIComponent(String(limit))}`,
+    {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -483,4 +508,3 @@ export async function retryForecastBatchRun(runId: number): Promise<ForecastBatc
 
   return await response.json();
 }
-

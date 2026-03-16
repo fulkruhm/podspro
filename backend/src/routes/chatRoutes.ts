@@ -1,5 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { startChat, sendMessage, streamMessage, fetchRealtimeData, selectModelTier, type ChatLike, type ModelTier } from '../services/geminiService.js';
+import {
+  startChat,
+  sendMessage,
+  streamMessage,
+  fetchRealtimeData,
+  selectModelTier,
+  type ChatLike,
+  type ModelTier,
+} from '../services/geminiService.js';
 import {
   validateRequestBody,
   chatMessageSchema,
@@ -45,7 +53,7 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T
 chatRouter.post('/start', strictLimiter, (_req: Request, res: Response) => {
   try {
     const sessionId = Date.now().toString();
-    
+
     chatSessions.set(sessionId, {
       createdAt: new Date(),
       isActive: true,
@@ -53,7 +61,7 @@ chatRouter.post('/start', strictLimiter, (_req: Request, res: Response) => {
       modelTier: 'fast',
       messageCount: 0,
     });
-    
+
     console.log(`[chatRouter] Chat session created: ${sessionId}`);
     res.json({ sessionId });
   } catch (error) {
@@ -95,17 +103,20 @@ chatRouter.post(
       }
 
       if (response === 'ERROR_MODEL_UNAVAILABLE' || response === 'ERROR_API_KEY_REQUIRED') {
-        response = 'AI advisor is currently unavailable due to model or API access configuration. Please verify GEMINI_API_KEY and model access.';
+        response =
+          'AI advisor is currently unavailable due to model or API access configuration. Please verify GEMINI_API_KEY and model access.';
       }
 
       session.messageCount += 1;
       chatSessions.set(sessionId, session);
-      
+
       res.json({ response });
     } catch (error) {
       console.error('Error sending message:', error);
       if (error instanceof Error && error.message === 'AI response timeout') {
-        return res.status(504).json({ error: 'AI took too long to respond. Please try a shorter prompt.' });
+        return res
+          .status(504)
+          .json({ error: 'AI took too long to respond. Please try a shorter prompt.' });
       }
       res.status(500).json({ error: 'Failed to send message' });
     }
@@ -204,12 +215,15 @@ chatRouter.post(
 );
 
 // Cleanup: Remove expired sessions every 30 minutes
-setInterval(() => {
-  const now = new Date();
-  for (const [sessionId, session] of chatSessions.entries()) {
-    // Remove sessions older than 24 hours
-    if (now.getTime() - session.createdAt.getTime() > 24 * 60 * 60 * 1000) {
-      chatSessions.delete(sessionId);
+setInterval(
+  () => {
+    const now = new Date();
+    for (const [sessionId, session] of chatSessions.entries()) {
+      // Remove sessions older than 24 hours
+      if (now.getTime() - session.createdAt.getTime() > 24 * 60 * 60 * 1000) {
+        chatSessions.delete(sessionId);
+      }
     }
-  }
-}, 30 * 60 * 1000);
+  },
+  30 * 60 * 1000
+);

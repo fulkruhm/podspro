@@ -140,7 +140,12 @@ export async function initializeForecastBatchQueueProcessing() {
 
 export async function enqueueStoreProductForecastBatch(
   options: ForecastBatchOptions & { idempotencyKey?: string } = {}
-): Promise<{ runId: number; queued: boolean; duplicate: boolean; execution?: Promise<ForecastBatchResult> }> {
+): Promise<{
+  runId: number;
+  queued: boolean;
+  duplicate: boolean;
+  execution?: Promise<ForecastBatchResult>;
+}> {
   await initializeWorker();
 
   const queueInstance = await getQueue();
@@ -218,7 +223,14 @@ export async function getForecastBatchQueueStats() {
     } as const;
   }
 
-  const counts = await queueInstance.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
+  const counts = await queueInstance.getJobCounts(
+    'waiting',
+    'active',
+    'completed',
+    'failed',
+    'delayed',
+    'paused'
+  );
   return {
     mode: 'redis_queue',
     workerInitialized,

@@ -61,6 +61,14 @@ PODS is built to become the **AI operating system for physical operations** — 
 
 ---
 
+## Documentation
+
+- Docs index: `docs/README.md`
+- Current runbooks: `docs/runbooks/`
+- Architecture decisions: `docs/adr/`
+
+---
+
 ## Why PODS is Different
 
 - **AI explains *why*, not just what** — root cause reasoning, not just anomaly flags

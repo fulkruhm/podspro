@@ -46,6 +46,10 @@ interface ForecastServiceResponse {
   model_version?: string;
 }
 
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function runStoreProductForecastBatch(
   runId: number,
   options: ForecastBatchOptions = {}
@@ -55,7 +59,12 @@ async function runStoreProductForecastBatch(
   const minHistoryPoints = Number(options.minHistoryPoints ?? 14);
 
   try {
-    const forecastInputs = await getStoreProductForecastInputs(historyDays, minHistoryPoints, forecastDays, options.filters);
+    const forecastInputs = await getStoreProductForecastInputs(
+      historyDays,
+      minHistoryPoints,
+      forecastDays,
+      options.filters
+    );
 
     const errors: Array<{ product_id: string; store_id: string; error: string }> = [];
     let succeeded = 0;
@@ -85,7 +94,7 @@ async function runStoreProductForecastBatch(
           continue;
         }
 
-        const forecast = await response.json() as ForecastServiceResponse;
+        const forecast = (await response.json()) as ForecastServiceResponse;
 
         await saveStoreProductForecast(
           item.product_id,
@@ -101,11 +110,11 @@ async function runStoreProductForecastBatch(
         );
 
         succeeded += 1;
-      } catch (error: any) {
+      } catch (error: unknown) {
         errors.push({
           product_id: item.product_id,
           store_id: item.store_id,
-          error: error?.message || 'Unknown error',
+          error: toErrorMessage(error),
         });
       }
     }
@@ -113,23 +122,19 @@ async function runStoreProductForecastBatch(
     const totalStoreProducts = forecastInputs.length;
     const failed = errors.length;
 
-    await completeBatchJobRun(
-      runId,
-      failed > 0 ? 'partial_success' : 'success',
-      {
-        totalItems: totalStoreProducts,
-        succeededItems: succeeded,
-        failedItems: failed,
-        errorSummary: failed > 0 ? `${failed} store-products failed` : undefined,
-        details: {
-          historyDays,
-          forecastDays,
-          minHistoryPoints,
-          filters: options.filters,
-          errors,
-        },
-      }
-    );
+    await completeBatchJobRun(runId, failed > 0 ? 'partial_success' : 'success', {
+      totalItems: totalStoreProducts,
+      succeededItems: succeeded,
+      failedItems: failed,
+      errorSummary: failed > 0 ? `${failed} store-products failed` : undefined,
+      details: {
+        historyDays,
+        forecastDays,
+        minHistoryPoints,
+        filters: options.filters,
+        errors,
+      },
+    });
 
     return {
       totalStoreProducts,
@@ -138,8 +143,8 @@ async function runStoreProductForecastBatch(
       errors,
       runId,
     };
-  } catch (error: any) {
-    await failBatchJobRun(runId, error?.message || 'Batch execution failed');
+  } catch (error: unknown) {
+    await failBatchJobRun(runId, toErrorMessage(error));
     throw error;
   }
 }

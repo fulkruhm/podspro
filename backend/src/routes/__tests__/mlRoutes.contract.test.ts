@@ -3,6 +3,21 @@ import express from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fetchFromMlService from 'node-fetch';
 
+interface ErrorApiResponse {
+  error: string;
+}
+
+interface ForecastApiResponse {
+  product_id: string;
+  forecast: number[];
+}
+
+interface ValidationErrorResponse {
+  error: string;
+}
+
+type MlFetchResponse = Awaited<ReturnType<typeof fetchFromMlService>>;
+
 vi.mock('../../db.js', () => ({
   getLatestBatchJobRun: vi.fn(async () => null),
   saveStoreProductForecast: vi.fn(async () => null),
@@ -27,7 +42,10 @@ vi.mock('../../services/forecastBatchQueue.js', () => ({
     counts: { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 },
   })),
   getFailedForecastBatchJobs: vi.fn(async () => []),
-  retryFailedForecastBatchRun: vi.fn(async () => ({ retried: false, reason: 'run_not_found_in_failed_queue' })),
+  retryFailedForecastBatchRun: vi.fn(async () => ({
+    retried: false,
+    reason: 'run_not_found_in_failed_queue',
+  })),
 }));
 
 vi.mock('../../services/forecastBatchScheduler.js', () => ({
@@ -87,7 +105,7 @@ describe('ml routes contract and auth', () => {
     });
 
     expect(response.status).toBe(401);
-    const payload = await response.json() as any;
+    const payload = (await response.json()) as ErrorApiResponse;
     expect(payload.error).toContain('Authentication required');
   });
 
@@ -96,18 +114,18 @@ describe('ml routes contract and auth', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${issueToken('admin')}`,
+        Authorization: `Bearer ${issueToken('admin')}`,
       },
       body: JSON.stringify({ historical_demand: [10], persist: false, extra_key: true }),
     });
 
     expect(response.status).toBe(400);
-    const payload = await response.json() as any;
+    const payload = (await response.json()) as ValidationErrorResponse;
     expect(payload.error).toBe('Validation failed');
   });
 
   it('proxies valid forecast payload to ML service', async () => {
-    const mockFetch = vi.mocked(fetchFromMlService as unknown as (...args: any[]) => any);
+    const mockFetch = vi.mocked(fetchFromMlService);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -116,13 +134,13 @@ describe('ml routes contract and auth', () => {
         forecast: [12, 13],
         confidence_interval: [10, 14],
       }),
-    } as any);
+    } as unknown as MlFetchResponse);
 
     const response = await fetch(`${baseUrl}/api/ml/forecast`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${issueToken('admin')}`,
+        Authorization: `Bearer ${issueToken('admin')}`,
       },
       body: JSON.stringify({
         product_id: 'p1',
@@ -134,7 +152,7 @@ describe('ml routes contract and auth', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json() as any;
+    const payload = (await response.json()) as ForecastApiResponse;
     expect(payload.product_id).toBe('p1');
     expect(payload.forecast).toEqual([12, 13]);
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -144,24 +162,24 @@ describe('ml routes contract and auth', () => {
   it('enforces admin role on batch status endpoint', async () => {
     const response = await fetch(`${baseUrl}/api/ml/forecast/batch/status`, {
       headers: {
-        'Authorization': `Bearer ${issueToken('store_user')}`,
+        Authorization: `Bearer ${issueToken('store_user')}`,
       },
     });
 
     expect(response.status).toBe(403);
-    const payload = await response.json() as any;
+    const payload = (await response.json()) as ErrorApiResponse;
     expect(payload.error).toContain('Insufficient permissions');
   });
 
   it('enforces admin role on queue status endpoint', async () => {
     const response = await fetch(`${baseUrl}/api/ml/forecast/batch/queue`, {
       headers: {
-        'Authorization': `Bearer ${issueToken('store_user')}`,
+        Authorization: `Bearer ${issueToken('store_user')}`,
       },
     });
 
     expect(response.status).toBe(403);
-    const payload = await response.json() as any;
+    const payload = (await response.json()) as ErrorApiResponse;
     expect(payload.error).toContain('Insufficient permissions');
   });
 });

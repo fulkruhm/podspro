@@ -1,5 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { getAllUsers, getUserById, createUser, updateUser, deleteUser, createAuditLog } from '../db.js';
+import {
+  getAllUsers,
+  getUserById,
+  createUser,
+  updateUser,
+  deleteUser,
+  createAuditLog,
+} from '../db.js';
 import {
   validateRequestBody,
   validateRequestParams,
@@ -19,7 +26,7 @@ userRouter.get('/', async (_req: Request, res: Response) => {
   try {
     const users = await getAllUsers();
     // Filter out sensitive fields before sending to client
-    const safeUsers = users.map(u => ({
+    const safeUsers = users.map((u) => ({
       id: u.id,
       name: u.name,
       username: u.username,
@@ -83,7 +90,14 @@ userRouter.post(
         severity: 'info',
       });
       // Don't send password or sensitive fields
-      const { password, failed_login_attempts, is_locked, created_at, updated_at, ...safeUser } = user;
+      const {
+        password: _password,
+        failed_login_attempts: _failed_login_attempts,
+        is_locked: _is_locked,
+        created_at: _created_at,
+        updated_at: _updated_at,
+        ...safeUser
+      } = user;
       res.status(201).json({ user: safeUser });
     } catch (error) {
       console.error('Error creating user:', error);
@@ -114,7 +128,14 @@ userRouter.put(
         severity: 'info',
       });
       // Don't send password or sensitive fields
-      const { password, failed_login_attempts, is_locked, created_at, updated_at, ...safeUser } = user;
+      const {
+        password: _password,
+        failed_login_attempts: _failed_login_attempts,
+        is_locked: _is_locked,
+        created_at: _created_at,
+        updated_at: _updated_at,
+        ...safeUser
+      } = user;
       res.json({ user: safeUser });
     } catch (error) {
       console.error('Error updating user:', error);

@@ -1,28 +1,44 @@
 // Frontend service for user management
 import { authFetch } from './authSession';
+import type { User } from '../types';
 
 // Use relative paths to work with nginx proxy
 const API_BASE_URL = '/api';
 
+type UserApiRow = {
+  id?: string;
+  name?: string;
+  username?: string;
+  role?: User['role'];
+  assigned_store?: string;
+  assigned_region?: string;
+  email?: string;
+  phone_number?: string;
+  password?: string;
+  status?: User['status'];
+  failed_login_attempts?: number;
+  is_locked?: boolean;
+};
+
 // Map database snake_case fields to frontend camelCase
-function mapUserFromDB(dbUser: any) {
+function mapUserFromDB(dbUser: UserApiRow): User {
   return {
-    id: dbUser.id,
-    name: dbUser.name,
-    username: dbUser.username,
-    role: dbUser.role,
+    id: dbUser.id || '',
+    name: dbUser.name || '',
+    username: dbUser.username || '',
+    role: dbUser.role || 'store_user',
     assignedStore: dbUser.assigned_store,
     assignedRegion: dbUser.assigned_region,
     email: dbUser.email,
     phoneNumber: dbUser.phone_number,
     password: dbUser.password,
-    status: dbUser.status,
+    status: dbUser.status || 'active',
     failedLoginAttempts: dbUser.failed_login_attempts,
     isLocked: dbUser.is_locked,
   };
 }
 
-export async function fetchUsers() {
+export async function fetchUsers(): Promise<User[]> {
   try {
     const response = await authFetch(`${API_BASE_URL}/users`);
     if (!response.ok) {
@@ -30,7 +46,7 @@ export async function fetchUsers() {
       return [];
     }
     const data = await response.json();
-    const mappedUsers = (data.users || []).map(mapUserFromDB);
+    const mappedUsers = ((data.users || []) as UserApiRow[]).map(mapUserFromDB);
     console.log('[userService] Fetched users from API:', mappedUsers);
     return mappedUsers;
   } catch (error) {
@@ -39,7 +55,7 @@ export async function fetchUsers() {
   }
 }
 
-export async function updateUser(userId: string, updates: any) {
+export async function updateUser(userId: string, updates: Partial<User>): Promise<User> {
   try {
     const response = await authFetch(`${API_BASE_URL}/users/${userId}`, {
       method: 'PUT',
@@ -50,14 +66,14 @@ export async function updateUser(userId: string, updates: any) {
       throw new Error(`Failed to update user: ${response.status}`);
     }
     const data = await response.json();
-    return mapUserFromDB(data.user);
+    return mapUserFromDB(data.user as UserApiRow);
   } catch (error) {
     console.error('[userService] Error updating user:', error);
     throw error;
   }
 }
 
-export async function createUser(user: any) {
+export async function createUser(user: Omit<User, 'id'>): Promise<User> {
   try {
     const response = await authFetch(`${API_BASE_URL}/users`, {
       method: 'POST',
@@ -68,7 +84,7 @@ export async function createUser(user: any) {
       throw new Error(`Failed to create user: ${response.status}`);
     }
     const data = await response.json();
-    return mapUserFromDB(data.user);
+    return mapUserFromDB(data.user as UserApiRow);
   } catch (error) {
     console.error('[userService] Error creating user:', error);
     throw error;

@@ -41,43 +41,8 @@ function getRequestIdentity(req: Request): RequestIdentity | null {
 }
 
 export function requireAuthenticatedUser(req: Request, res: Response, next: NextFunction) {
-  Promise.resolve().then(async () => {
-    const identity = getRequestIdentity(req);
-    if (!identity) {
-      return res.status(401).json({
-        error: 'Authentication required. Provide a valid Authorization bearer token.',
-      });
-    }
-
-    if (identity.status !== 'active' && identity.username !== 'sysadmin') {
-      return res.status(403).json({
-        error: `Account is ${identity.status}`,
-      });
-    }
-
-    const authorizationHeader = req.header('authorization') || '';
-    const token = authorizationHeader.startsWith('Bearer ') ? authorizationHeader.slice('Bearer '.length).trim() : '';
-    const payload = token ? verifyAuthToken(token) : null;
-    if (!payload || payload.tokenType !== 'access') {
-      return res.status(401).json({ error: 'Access token required' });
-    }
-
-    const revoked = await isAccessTokenRevoked(identity.tokenId);
-    if (revoked) {
-      return res.status(401).json({ error: 'Token has been revoked' });
-    }
-
-    res.locals.identity = identity;
-    return next();
-  }).catch((error) => {
-    console.error('Auth middleware error:', error);
-    return res.status(500).json({ error: 'Authentication service unavailable' });
-  });
-}
-
-export function requireAnyRole(roles: Role[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    Promise.resolve().then(async () => {
+  Promise.resolve()
+    .then(async () => {
       const identity = getRequestIdentity(req);
       if (!identity) {
         return res.status(401).json({
@@ -92,7 +57,9 @@ export function requireAnyRole(roles: Role[]) {
       }
 
       const authorizationHeader = req.header('authorization') || '';
-      const token = authorizationHeader.startsWith('Bearer ') ? authorizationHeader.slice('Bearer '.length).trim() : '';
+      const token = authorizationHeader.startsWith('Bearer ')
+        ? authorizationHeader.slice('Bearer '.length).trim()
+        : '';
       const payload = token ? verifyAuthToken(token) : null;
       if (!payload || payload.tokenType !== 'access') {
         return res.status(401).json({ error: 'Access token required' });
@@ -103,18 +70,59 @@ export function requireAnyRole(roles: Role[]) {
         return res.status(401).json({ error: 'Token has been revoked' });
       }
 
-      if (!roles.includes(identity.role)) {
-        return res.status(403).json({
-          error: `Insufficient permissions. Allowed roles: ${roles.join(', ')}`,
-        });
-      }
-
       res.locals.identity = identity;
       return next();
-    }).catch((error) => {
-      console.error('Role middleware error:', error);
+    })
+    .catch((error) => {
+      console.error('Auth middleware error:', error);
       return res.status(500).json({ error: 'Authentication service unavailable' });
     });
+}
+
+export function requireAnyRole(roles: Role[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve()
+      .then(async () => {
+        const identity = getRequestIdentity(req);
+        if (!identity) {
+          return res.status(401).json({
+            error: 'Authentication required. Provide a valid Authorization bearer token.',
+          });
+        }
+
+        if (identity.status !== 'active' && identity.username !== 'sysadmin') {
+          return res.status(403).json({
+            error: `Account is ${identity.status}`,
+          });
+        }
+
+        const authorizationHeader = req.header('authorization') || '';
+        const token = authorizationHeader.startsWith('Bearer ')
+          ? authorizationHeader.slice('Bearer '.length).trim()
+          : '';
+        const payload = token ? verifyAuthToken(token) : null;
+        if (!payload || payload.tokenType !== 'access') {
+          return res.status(401).json({ error: 'Access token required' });
+        }
+
+        const revoked = await isAccessTokenRevoked(identity.tokenId);
+        if (revoked) {
+          return res.status(401).json({ error: 'Token has been revoked' });
+        }
+
+        if (!roles.includes(identity.role)) {
+          return res.status(403).json({
+            error: `Insufficient permissions. Allowed roles: ${roles.join(', ')}`,
+          });
+        }
+
+        res.locals.identity = identity;
+        return next();
+      })
+      .catch((error) => {
+        console.error('Role middleware error:', error);
+        return res.status(500).json({ error: 'Authentication service unavailable' });
+      });
   };
 }
 

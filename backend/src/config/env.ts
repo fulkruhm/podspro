@@ -26,6 +26,14 @@ export interface AppConfig {
   geminiAnomalyModel: string;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
 const DEFAULT_PORT = 3001;
 const DEFAULT_DATABASE_URL = 'postgresql://pods_user:pods_password@localhost:5432/pods_db';
 const DEFAULT_ML_SERVICE_URL = 'http://ml-service:5000';
@@ -238,63 +246,62 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   let mlForecastCacheTtlSeconds = DEFAULT_ML_FORECAST_CACHE_TTL_SECONDS;
   let mlInfoCacheTtlSeconds = DEFAULT_ML_INFO_CACHE_TTL_SECONDS;
   let aiResponseTimeoutMs: number | undefined;
-  let geminiApiKey: string | undefined;
   let geminiFastModel = DEFAULT_GEMINI_FAST_MODEL;
   let geminiProModel = DEFAULT_GEMINI_PRO_MODEL;
   let geminiAnomalyModel = DEFAULT_GEMINI_ANOMALY_MODEL;
 
   try {
     port = parsePort(env.PORT);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     nodeEnv = parseNodeEnv(env.NODE_ENV);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     frontendUrl = parseOptionalUrl(env.FRONTEND_URL, 'FRONTEND_URL');
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     databaseUrl = parseDatabaseUrl(env.DATABASE_URL);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     mlServiceUrl = parseMlServiceUrl(env.ML_SERVICE_URL);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     redisUrl = parseOptionalRedisUrl(env.REDIS_URL);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     authSecret = parseAuthSecret(env.AUTH_SECRET, nodeEnv);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     authTokenTtlMinutes = parseAuthTokenTtlMinutes(env.AUTH_TOKEN_TTL_MINUTES);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     refreshTokenTtlMinutes = parseRefreshTokenTtlMinutes(env.REFRESH_TOKEN_TTL_MINUTES);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
@@ -305,8 +312,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       10
     );
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
@@ -317,8 +324,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       100,
       300000
     );
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
@@ -329,20 +336,20 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       20
     );
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     forecastBatchHour = parseForecastBatchHour(env.FORECAST_BATCH_HOUR);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     forecastBatchMinute = parseForecastBatchMinute(env.FORECAST_BATCH_MINUTE);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
@@ -353,8 +360,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       720
     );
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
@@ -365,8 +372,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       86400
     );
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
@@ -377,8 +384,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       86400
     );
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
@@ -389,20 +396,21 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       86400
     );
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
   try {
     aiResponseTimeoutMs = parseOptionalTimeoutMs(env.AI_RESPONSE_TIMEOUT_MS);
-  } catch (error: any) {
-    errors.push(error.message);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
   }
 
-  geminiApiKey = parseOptionalSecret(env.GEMINI_API_KEY) || parseOptionalSecret(env.API_KEY);
+  const geminiApiKey = parseOptionalSecret(env.GEMINI_API_KEY) || parseOptionalSecret(env.API_KEY);
   geminiFastModel = parseOptionalSecret(env.GEMINI_FAST_MODEL) || DEFAULT_GEMINI_FAST_MODEL;
   geminiProModel = parseOptionalSecret(env.GEMINI_PRO_MODEL) || DEFAULT_GEMINI_PRO_MODEL;
-  geminiAnomalyModel = parseOptionalSecret(env.GEMINI_ANOMALY_MODEL) || DEFAULT_GEMINI_ANOMALY_MODEL;
+  geminiAnomalyModel =
+    parseOptionalSecret(env.GEMINI_ANOMALY_MODEL) || DEFAULT_GEMINI_ANOMALY_MODEL;
 
   if (errors.length > 0) {
     throw new Error(`Invalid environment configuration:\n- ${errors.join('\n- ')}`);

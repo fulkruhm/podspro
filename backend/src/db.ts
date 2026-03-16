@@ -1,6 +1,7 @@
 import pkg from 'pg';
 import { randomUUID } from 'crypto';
 import { loadAppConfig } from './config/env.js';
+import type { Role } from './types.js';
 const { Pool } = pkg;
 
 const appConfig = loadAppConfig();
@@ -18,6 +19,30 @@ pool.on('error', (err: Error) => {
 
 export type BatchJobStatus = 'running' | 'success' | 'failed' | 'partial_success';
 
+interface UpdateProductInput {
+  current_stock?: number;
+  avg_daily_demand?: number;
+  status?: 'optimal' | 'low' | 'excess' | 'critical';
+  last_restock_date?: string;
+  historical_demand?: number[];
+  forecasted_demand?: number[];
+}
+
+interface UserWriteInput {
+  id: string;
+  name: string;
+  username: string;
+  role: Role;
+  assignedStore?: string;
+  assignedRegion?: string;
+  email?: string;
+  phoneNumber?: string;
+  password?: string;
+  status?: 'active' | 'paused' | 'deactivated';
+  failedLoginAttempts?: number;
+  isLocked?: boolean;
+}
+
 let databaseInitialized = false;
 
 const BATCH_RUN_STALE_MINUTES = appConfig.batchRunStaleMinutes;
@@ -30,9 +55,11 @@ async function waitForDatabase(maxRetries = 30, delayMs = 1000) {
       client.release();
       console.log('✓ Database connection successful');
       return;
-    } catch (error) {
-      console.log(`Database connection attempt ${i + 1}/${maxRetries} failed, retrying in ${delayMs}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+    } catch (_error) {
+      console.log(
+        `Database connection attempt ${i + 1}/${maxRetries} failed, retrying in ${delayMs}ms...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
   throw new Error('Failed to connect to database after 30 attempts');
@@ -162,9 +189,7 @@ async function ensureAuditLogTable() {
     )
   `);
 
-  await pool.query(
-    'CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)'
-  );
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)');
 
   await pool.query(
     'CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC)'
@@ -205,11 +230,14 @@ export async function checkDatabaseReadiness() {
 }
 
 export async function createBatchJobRun(jobType: string, triggeredBy?: string) {
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     INSERT INTO ml_batch_job_runs (job_type, status, triggered_by, started_at)
     VALUES ($1, 'running', $2, NOW())
     RETURNING *
-  `, [jobType, triggeredBy ?? null]);
+  `,
+    [jobType, triggeredBy ?? null]
+  );
 
   return result.rows[0];
 }
@@ -225,7 +253,8 @@ export async function completeBatchJobRun(
     details?: unknown;
   }
 ) {
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     UPDATE ml_batch_job_runs
     SET
       status = $1,
@@ -237,21 +266,24 @@ export async function completeBatchJobRun(
       details = $6
     WHERE id = $7
     RETURNING *
-  `, [
-    status,
-    summary.totalItems,
-    summary.succeededItems,
-    summary.failedItems,
-    summary.errorSummary ?? null,
-    summary.details ? JSON.stringify(summary.details) : null,
-    id,
-  ]);
+  `,
+    [
+      status,
+      summary.totalItems,
+      summary.succeededItems,
+      summary.failedItems,
+      summary.errorSummary ?? null,
+      summary.details ? JSON.stringify(summary.details) : null,
+      id,
+    ]
+  );
 
   return result.rows[0];
 }
 
 export async function failBatchJobRun(id: number, errorSummary: string) {
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     UPDATE ml_batch_job_runs
     SET
       status = 'failed',
@@ -259,13 +291,16 @@ export async function failBatchJobRun(id: number, errorSummary: string) {
       error_summary = $1
     WHERE id = $2
     RETURNING *
-  `, [errorSummary, id]);
+  `,
+    [errorSummary, id]
+  );
 
   return result.rows[0];
 }
 
 export async function getLatestBatchJobRun(jobType: string) {
-  await pool.query(`
+  await pool.query(
+    `
     UPDATE ml_batch_job_runs
     SET
       status = 'failed',
@@ -274,22 +309,28 @@ export async function getLatestBatchJobRun(jobType: string) {
     WHERE job_type = $1
       AND status = 'running'
       AND started_at < NOW() - ($2::text || ' minutes')::interval
-  `, [jobType, BATCH_RUN_STALE_MINUTES]);
+  `,
+    [jobType, BATCH_RUN_STALE_MINUTES]
+  );
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT *
     FROM ml_batch_job_runs
     WHERE job_type = $1
     ORDER BY started_at DESC
     LIMIT 1
-  `, [jobType]);
+  `,
+    [jobType]
+  );
 
   return result.rows[0] ?? null;
 }
 
 export async function getForecastReviewItems(limit = 50) {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       WITH history AS (
         SELECT
           h.product_id,
@@ -415,7 +456,9 @@ export async function getForecastReviewItems(limit = 50) {
       WHERE history.product_id IS NOT NULL AND forecast.product_id IS NOT NULL
       ORDER BY anomaly_score DESC, p.store, p.id
       LIMIT $1
-    `, [limit]);
+    `,
+      [limit]
+    );
 
     return result.rows;
   } catch (error) {
@@ -433,7 +476,8 @@ export async function createForecastReviewDecision(input: {
   decidedBy?: string;
 }) {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       INSERT INTO forecast_review_decisions (
         product_id,
         store_id,
@@ -445,14 +489,16 @@ export async function createForecastReviewDecision(input: {
       )
       VALUES ($1, $2, $3, $4, $5, $6, NOW())
       RETURNING *
-    `, [
-      input.productId,
-      input.storeId,
-      input.decisionStatus,
-      input.baselineAdjustmentPct ?? null,
-      input.notes ?? null,
-      input.decidedBy ?? null,
-    ]);
+    `,
+      [
+        input.productId,
+        input.storeId,
+        input.decisionStatus,
+        input.baselineAdjustmentPct ?? null,
+        input.notes ?? null,
+        input.decidedBy ?? null,
+      ]
+    );
 
     return result.rows[0];
   } catch (error) {
@@ -499,7 +545,8 @@ export async function getProducts() {
 
 export async function getProductById(id: string) {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT 
         p.*,
         COALESCE(dh.historical_demand, ARRAY[]::INTEGER[]) as historical_demand,
@@ -525,7 +572,9 @@ export async function getProductById(id: string) {
           )
       ) df ON true
       WHERE p.id = $1
-    `, [id]);
+    `,
+      [id]
+    );
     return result.rows[0] || null;
   } catch (error) {
     console.error('Error fetching product:', error);
@@ -559,7 +608,8 @@ export async function getRoutes() {
 
 export async function getRouteById(id: string) {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT 
         fr.id,
         fr.origin,
@@ -573,7 +623,9 @@ export async function getRouteById(id: string) {
       LEFT JOIN freight_route_rates frr ON fr.id = frr.route_id
       WHERE fr.id = $1
       GROUP BY fr.id, fr.origin, fr.destination, fr.current_rate, fr.trend, fr.capacity, fr.risk_level
-    `, [id]);
+    `,
+      [id]
+    );
     return result.rows[0] || null;
   } catch (error) {
     console.error('Error fetching route:', error);
@@ -581,32 +633,38 @@ export async function getRouteById(id: string) {
   }
 }
 
-export async function updateProduct(id: string, data: any) {
+export async function updateProduct(id: string, data: UpdateProductInput) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const { 
-      current_stock, 
-      avg_daily_demand, 
-      status, 
+    const {
+      current_stock,
+      avg_daily_demand,
+      status,
       last_restock_date,
       historical_demand,
-      forecasted_demand 
+      forecasted_demand,
     } = data;
 
     // Update product
-    await client.query(`
+    await client.query(
+      `
       UPDATE products 
       SET current_stock = $1, avg_daily_demand = $2, status = $3, last_restock_date = $4, updated_at = NOW()
       WHERE id = $5
-    `, [current_stock, avg_daily_demand, status, last_restock_date, id]);
+    `,
+      [current_stock, avg_daily_demand, status, last_restock_date, id]
+    );
 
-    const productResult = await client.query(`
+    const productResult = await client.query(
+      `
       SELECT id, store
       FROM products
       WHERE id = $1
-    `, [id]);
+    `,
+      [id]
+    );
 
     const product = productResult.rows[0];
 
@@ -620,7 +678,8 @@ export async function updateProduct(id: string, data: any) {
         const demandQty = historical_demand[index];
         const daysAgo = historical_demand.length - index - 1;
 
-        await client.query(`
+        await client.query(
+          `
           INSERT INTO product_demand_history (product_id, store_id, demand_date, demand_qty)
           VALUES (
             $1,
@@ -628,7 +687,9 @@ export async function updateProduct(id: string, data: any) {
             CURRENT_DATE - ($3 * INTERVAL '1 day'),
             $4
           )
-        `, [id, product.store, daysAgo, demandQty]);
+        `,
+          [id, product.store, daysAgo, demandQty]
+        );
       }
     }
 
@@ -641,7 +702,8 @@ export async function updateProduct(id: string, data: any) {
       for (let index = 0; index < forecasted_demand.length; index++) {
         const forecastQty = forecasted_demand[index];
 
-        await client.query(`
+        await client.query(
+          `
           INSERT INTO product_demand_forecast (
             product_id,
             store_id,
@@ -658,13 +720,9 @@ export async function updateProduct(id: string, data: any) {
             NOW(),
             $5
           )
-        `, [
-          id,
-          product.store,
-          index,
-          forecastQty,
-          'Manually updated forecast value.',
-        ]);
+        `,
+          [id, product.store, index, forecastQty, 'Manually updated forecast value.']
+        );
       }
     }
 
@@ -692,10 +750,15 @@ export async function getStoreProductForecastInputs(
   }
 ) {
   try {
-    const whereClauses: string[] = ['COALESCE(array_length(history.historical_demand, 1), 0) >= $2'];
-    const params: any[] = [historyDays, minHistoryPoints, forecastDays];
+    const whereClauses: string[] = [
+      'COALESCE(array_length(history.historical_demand, 1), 0) >= $2',
+    ];
+    const params: unknown[] = [historyDays, minHistoryPoints, forecastDays];
 
-    const appendFilter = (value: string | undefined, clauseBuilder: (placeholder: string) => string) => {
+    const appendFilter = (
+      value: string | undefined,
+      clauseBuilder: (placeholder: string) => string
+    ) => {
       if (!value || !value.trim()) {
         return;
       }
@@ -712,7 +775,8 @@ export async function getStoreProductForecastInputs(
     appendFilter(filters?.product, (ph) => `p.id = ${ph}`);
     appendFilter(filters?.status, (ph) => `LOWER(p.status) = LOWER(${ph})`);
 
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       WITH history AS (
         SELECT
           h.product_id,
@@ -774,7 +838,9 @@ export async function getStoreProductForecastInputs(
         AND future_features.store_id = p.store
       WHERE ${whereClauses.join(' AND ')}
       ORDER BY p.store, p.id
-    `, params);
+    `,
+      params
+    );
 
     return result.rows;
   } catch (error) {
@@ -811,15 +877,17 @@ export async function saveStoreProductForecast(
 
     for (let index = 0; index < forecast.length; index++) {
       const pointForecast = forecast[index];
-      const variancePercent = baselineAvg && baselineAvg > 0
-        ? Math.round(((pointForecast - baselineAvg) / baselineAvg) * 100)
-        : null;
+      const variancePercent =
+        baselineAvg && baselineAvg > 0
+          ? Math.round(((pointForecast - baselineAvg) / baselineAvg) * 100)
+          : null;
 
       const generatedExplainability = `D+${index + 1}: ${trend || 'stable'} trend${variancePercent === null ? '' : `, ${variancePercent >= 0 ? '+' : ''}${variancePercent}% vs last-7-day baseline`}${confidenceInterval ? `, confidence ${Math.round(confidenceInterval[0])}-${Math.round(confidenceInterval[1])}` : ''}.`;
 
       const explainabilityText = explainabilityByDay?.[index] || generatedExplainability;
 
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO product_demand_forecast (
           product_id,
           store_id,
@@ -848,19 +916,21 @@ export async function saveStoreProductForecast(
           $11,
           NOW()
         )
-      `, [
-        productId,
-        storeId,
-        index,
-        pointForecast,
-        confidenceInterval?.[0] ?? null,
-        confidenceInterval?.[1] ?? null,
-        trend ?? null,
-        explainabilityText,
-        modelName,
-        modelVariant ?? null,
-        modelVersion ?? null,
-      ]);
+      `,
+        [
+          productId,
+          storeId,
+          index,
+          pointForecast,
+          confidenceInterval?.[0] ?? null,
+          confidenceInterval?.[1] ?? null,
+          trend ?? null,
+          explainabilityText,
+          modelName,
+          modelVariant ?? null,
+          modelVersion ?? null,
+        ]
+      );
     }
 
     await client.query('COMMIT');
@@ -868,8 +938,7 @@ export async function saveStoreProductForecast(
     await client.query('ROLLBACK');
     console.error('Error saving store-product forecast:', error);
     throw error;
-  }
-  finally {
+  } finally {
     client.release();
   }
 }
@@ -889,9 +958,12 @@ export async function getAllUsers() {
 
 export async function getUserById(id: string) {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT * FROM users WHERE id = $1
-    `, [id]);
+    `,
+      [id]
+    );
     return result.rows[0] || null;
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -901,9 +973,12 @@ export async function getUserById(id: string) {
 
 export async function getUserByUsername(username: string) {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT * FROM users WHERE username = $1
-    `, [username]);
+    `,
+      [username]
+    );
     return result.rows[0] || null;
   } catch (error) {
     console.error('Error fetching user by username:', error);
@@ -911,19 +986,31 @@ export async function getUserByUsername(username: string) {
   }
 }
 
-export async function createUser(user: any) {
+export async function createUser(user: UserWriteInput) {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       INSERT INTO users (
         id, name, username, role, assigned_store, assigned_region,
         email, phone_number, password, status, failed_login_attempts, is_locked
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
-    `, [
-      user.id, user.name, user.username, user.role, user.assignedStore || null,
-      user.assignedRegion || null, user.email, user.phoneNumber, user.password,
-      user.status || 'active', user.failedLoginAttempts || 0, user.isLocked || false
-    ]);
+    `,
+      [
+        user.id,
+        user.name,
+        user.username,
+        user.role,
+        user.assignedStore || null,
+        user.assignedRegion || null,
+        user.email,
+        user.phoneNumber,
+        user.password,
+        user.status || 'active',
+        user.failedLoginAttempts || 0,
+        user.isLocked || false,
+      ]
+    );
     return result.rows[0];
   } catch (error) {
     console.error('Error creating user:', error);
@@ -931,10 +1018,10 @@ export async function createUser(user: any) {
   }
 }
 
-export async function updateUser(id: string, updates: any) {
+export async function updateUser(id: string, updates: Partial<UserWriteInput>) {
   try {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 1;
 
     const fieldMap: Record<string, string> = {
@@ -948,7 +1035,7 @@ export async function updateUser(id: string, updates: any) {
       password: 'password',
       status: 'status',
       failedLoginAttempts: 'failed_login_attempts',
-      isLocked: 'is_locked'
+      isLocked: 'is_locked',
     };
 
     for (const [key, value] of Object.entries(updates)) {
@@ -963,12 +1050,15 @@ export async function updateUser(id: string, updates: any) {
     fields.push(`updated_at = NOW()`);
     values.push(id);
 
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       UPDATE users 
       SET ${fields.join(', ')}
       WHERE id = $${paramCount}
       RETURNING *
-    `, values);
+    `,
+      values
+    );
 
     return result.rows[0];
   } catch (error) {
@@ -1025,7 +1115,11 @@ export async function revokeRefreshToken(tokenId: string, replacedByTokenId?: st
   );
 }
 
-export async function revokeAccessToken(input: { tokenId: string; userId: string; expiresAtIso: string }) {
+export async function revokeAccessToken(input: {
+  tokenId: string;
+  userId: string;
+  expiresAtIso: string;
+}) {
   await pool.query(
     `
       INSERT INTO auth_revoked_access_tokens (token_id, user_id, expires_at)
@@ -1070,7 +1164,9 @@ export interface ForecastAbMetricsRecord {
   avg_actual: number;
 }
 
-export async function getForecastAbPerformanceMetrics(days = 30): Promise<ForecastAbMetricsRecord[]> {
+export async function getForecastAbPerformanceMetrics(
+  days = 30
+): Promise<ForecastAbMetricsRecord[]> {
   const safeDays = Number.isFinite(days) ? Math.max(1, Math.min(180, Math.floor(days))) : 30;
 
   const result = await pool.query(
@@ -1171,7 +1267,9 @@ export async function getAuditLogs(options: {
   severity?: AuditLogSeverity;
   userId?: string;
 }) {
-  const limit = Number.isFinite(options.limit) ? Math.max(1, Math.min(1000, Math.floor(options.limit!))) : 200;
+  const limit = Number.isFinite(options.limit)
+    ? Math.max(1, Math.min(1000, Math.floor(options.limit!)))
+    : 200;
   const offset = Number.isFinite(options.offset) ? Math.max(0, Math.floor(options.offset!)) : 0;
 
   const whereClauses: string[] = [];

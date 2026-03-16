@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches:
-      - '**'
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -29,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Format checks
+        run: npm run format:check
+
       - name: Type checks
         run: npm run lint
 
@@ -37,6 +42,10 @@ jobs:
 
       - name: Frontend tests
         run: npm run test -w frontend
+
+      - name: Node security audit (production deps)
+        continue-on-error: true
+        run: npm run security:npm
 
   ml-tests:
     name: ML tests (pytest)
@@ -54,8 +63,53 @@ jobs:
           cache-dependency-path: ml-service/requirements.txt
 
       - name: Install ML dependencies
-        run: pip install -r ml-service/requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ml-service/requirements.txt
+
+      - name: Install lint + security tools
+        run: pip install ruff pip-audit
+
+      - name: Ruff lint
+        run: ruff check ml-service
 
       - name: Run ML tests
         working-directory: ml-service
         run: pytest -q
+
+      - name: Python dependency audit
+        continue-on-error: true
+        run: pip-audit -r ml-service/requirements.txt
+
+  deploy-gcp:
+    name: Deploy to GCP (manual enable)
+    runs-on: ubuntu-latest
+    needs:
+      - node-checks
+      - ml-tests
+    if: github.ref == 'refs/heads/main' && vars.ENABLE_GCP_DEPLOY == 'true'
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Show active project
+        run: gcloud config set project "${{ secrets.GCP_PROJECT_ID }}" && gcloud info
+
+      - name: Deploy placeholder
+        run: |
+          echo "CI is green and deploy stage is enabled."
+          echo "Replace this step with your actual Cloud Run/GKE/App Engine deploy command."

@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit",
+    "lint": "npm run lint:types && npm run lint:eslint",
+    "lint:phase2": "eslint \"components/ForecastReviewView.tsx\" \"components/forecastReviewUtils.ts\" \"components/DashboardView.tsx\" \"components/AnomalyVisualization.tsx\" \"components/ForecastVisualization.tsx\" \"components/MLDashboard.tsx\" \"components/UserManagementView.tsx\" \"components/ProductDetailView.tsx\" \"services/dataService.ts\" \"services/userService.ts\" \"services/auditService.ts\" \"services/mlService.ts\" \"components/__tests__/forecastReviewUtils.test.ts\" --max-warnings=0",
+    "lint:types": "tsc --noEmit",
+    "lint:eslint": "eslint \"./**/*.{ts,tsx}\" --max-warnings=0 --ignore-pattern \"node_modules/**\" --ignore-pattern \"dist/**\"",
     "test": "vitest run"
   },
   "dependencies": {
@@ -20,8 +23,12 @@
     "tailwindcss": "^4.2.0"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vitest": "^4.1.0"

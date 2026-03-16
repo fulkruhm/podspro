@@ -5,17 +5,17 @@
 
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "daily"
+      interval: 'daily'
 
-  - package-ecosystem: "pip"
-    directory: "/ml-service"
+  - package-ecosystem: 'pip'
+    directory: '/ml-service'
     schedule:
-      interval: "daily"
+      interval: 'daily'
 
-  - package-ecosystem: "docker-compose"
-    directory: "/"
+  - package-ecosystem: 'docker-compose'
+    directory: '/'
     schedule:
-      interval: "daily"
+      interval: 'daily'

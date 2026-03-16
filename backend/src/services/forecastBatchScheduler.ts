@@ -4,6 +4,10 @@ import { loadAppConfig } from '../config/env.js';
 let schedulerTimer: NodeJS.Timeout | null = null;
 let nextRunAt: Date | null = null;
 
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function getScheduleConfig() {
   const appConfig = loadAppConfig();
   return {
@@ -41,8 +45,8 @@ function scheduleNextRun() {
         idempotencyKey: `scheduler:${dateKey}`,
       });
       console.log('✓ Nightly store-product forecast batch submitted');
-    } catch (error: any) {
-      console.error('Nightly forecast batch failed:', error?.message || error);
+    } catch (error: unknown) {
+      console.error('Nightly forecast batch failed:', toErrorMessage(error));
     } finally {
       scheduleNextRun();
     }
