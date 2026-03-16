@@ -10,14 +10,18 @@
     "start": "node dist/server.js",
     "seed": "NODE_OPTIONS='--loader ts-node/esm' node seed.ts",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:contract": "vitest run src/routes/__tests__/authRoutes.contract.test.ts src/routes/__tests__/mlRoutes.contract.test.ts src/openapi/__tests__/spec.test.ts",
+    "test:smoke": "npm run lint && npm run test:contract"
   },
   "dependencies": {
     "@google/genai": "^1.41.0",
+    "bullmq": "^5.12.9",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "pg": "^8.11.3",
+    "redis": "^4.7.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

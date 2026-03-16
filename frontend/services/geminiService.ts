@@ -1,5 +1,7 @@
 
 // Frontend Gemini service - calls the backend API instead of Gemini directly
+import { authFetch } from './authSession';
+
 const API_BASE_URL = '/api';
 const REQUEST_TIMEOUT_MS = 120000;
 
@@ -11,7 +13,7 @@ const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = R
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await authFetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }

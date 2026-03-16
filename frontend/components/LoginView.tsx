@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { User, AuditLog } from '../types';
 
 interface LoginViewProps {
-  onLogin: (user: User) => void;
+  onLogin: (user: User, token: string, refreshToken: string) => void;
   systemUsers: User[];
   onUpdateUser: (userId: string, updates: Partial<User>) => void;
   addAuditLog: (log: Omit<AuditLog, 'id' | 'timestamp'>) => void;
@@ -51,9 +51,15 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
       if (response.ok) {
         const data = await response.json();
         const user = data.user;
+        const token = data.token;
+        const refreshToken = data.refreshToken;
         console.log('[LoginView] Login successful for user:', user.username);
+        if (!token || !refreshToken) {
+          setError('ERR_AUTH: Token not returned by authentication service');
+          return;
+        }
         
-        onLogin(user);
+        onLogin(user, token, refreshToken);
         addAuditLog({
           userId: user.id,
           userName: user.name,

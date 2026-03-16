@@ -6,8 +6,9 @@ import {
   completeBatchJobRun,
   failBatchJobRun,
 } from '../db.js';
+import { loadAppConfig } from '../config/env.js';
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://ml-service:5000';
+const ML_SERVICE_URL = loadAppConfig().mlServiceUrl;
 
 export const STORE_PRODUCT_FORECAST_JOB_TYPE = 'store_product_forecast';
 
@@ -43,7 +44,7 @@ interface ForecastServiceResponse {
 }
 
 async function runStoreProductForecastBatch(
-  runRecord: { id: number },
+  runId: number,
   options: ForecastBatchOptions = {}
 ): Promise<ForecastBatchResult> {
   const historyDays = Number(options.historyDays ?? 56);
@@ -108,7 +109,7 @@ async function runStoreProductForecastBatch(
     const failed = errors.length;
 
     await completeBatchJobRun(
-      runRecord.id,
+      runId,
       failed > 0 ? 'partial_success' : 'success',
       {
         totalItems: totalStoreProducts,
@@ -130,21 +131,33 @@ async function runStoreProductForecastBatch(
       succeeded,
       failed,
       errors,
-      runId: runRecord.id,
+      runId,
     };
   } catch (error: any) {
-    await failBatchJobRun(runRecord.id, error?.message || 'Batch execution failed');
+    await failBatchJobRun(runId, error?.message || 'Batch execution failed');
     throw error;
   }
+}
+
+export async function createStoreProductForecastBatchRun(options: ForecastBatchOptions = {}) {
+  const runRecord = await createBatchJobRun(STORE_PRODUCT_FORECAST_JOB_TYPE, options.triggeredBy);
+  return runRecord.id as number;
+}
+
+export async function executeExistingStoreProductForecastBatch(
+  runId: number,
+  options: ForecastBatchOptions = {}
+): Promise<ForecastBatchResult> {
+  return runStoreProductForecastBatch(runId, options);
 }
 
 export async function startStoreProductForecastBatch(
   options: ForecastBatchOptions = {}
 ): Promise<{ runId: number; execution: Promise<ForecastBatchResult> }> {
-  const runRecord = await createBatchJobRun(STORE_PRODUCT_FORECAST_JOB_TYPE, options.triggeredBy);
-  const execution = runStoreProductForecastBatch(runRecord, options);
+  const runId = await createStoreProductForecastBatchRun(options);
+  const execution = executeExistingStoreProductForecastBatch(runId, options);
   return {
-    runId: runRecord.id,
+    runId,
     execution,
   };
 }
@@ -152,6 +165,6 @@ export async function startStoreProductForecastBatch(
 export async function executeStoreProductForecastBatch(
   options: ForecastBatchOptions = {}
 ): Promise<ForecastBatchResult> {
-  const runRecord = await createBatchJobRun(STORE_PRODUCT_FORECAST_JOB_TYPE, options.triggeredBy);
-  return runStoreProductForecastBatch(runRecord, options);
+  const runId = await createStoreProductForecastBatchRun(options);
+  return executeExistingStoreProductForecastBatch(runId, options);
 }

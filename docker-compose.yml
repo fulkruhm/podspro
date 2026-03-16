@@ -19,6 +19,21 @@ services:
       retries: 10
       start_period: 10s
 
+  redis:
+    image: redis:7-alpine
+    container_name: pods-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
   backend:
     build:
       context: .
@@ -31,11 +46,15 @@ services:
       - PORT=3001
       - AI_RESPONSE_TIMEOUT_MS=150000
       - NODE_ENV=production
+      - AUTH_SECRET=${AUTH_SECRET:-pods-compose-local-dev-auth-secret-change-this-123456}
       - DATABASE_URL=postgresql://pods_user:pods_password@postgres:5432/pods_db
+      - REDIS_URL=redis://redis:6379
     env_file:
       - backend/.env
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # Run database seed once after postgres is ready
@@ -98,3 +117,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

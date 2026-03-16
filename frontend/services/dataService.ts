@@ -1,5 +1,6 @@
 // Frontend Data Service - Fetches products and routes from backend API
-const API_BASE_URL = '/api';
+import { authFetch } from './authSession';
+import { appConfig } from '../config/appConfig';
 
 export interface Product {
   id: string;
@@ -81,8 +82,8 @@ function mapRouteFromDB(dbRoute: any): FreightRoute {
 
 export async function fetchProducts(): Promise<Product[]> {
   try {
-    console.log('[dataService] Fetching products from:', `${API_BASE_URL}/data/products`);
-    const response = await fetch(`${API_BASE_URL}/data/products`, {
+    console.log('[dataService] Fetching products from:', `${appConfig.apiBaseUrl}/data/products`);
+    const response = await authFetch(`${appConfig.apiBaseUrl}/data/products`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -99,8 +100,8 @@ export async function fetchProducts(): Promise<Product[]> {
 
 export async function fetchRoutes(): Promise<FreightRoute[]> {
   try {
-    console.log('[dataService] Fetching routes from:', `${API_BASE_URL}/data/routes`);
-    const response = await fetch(`${API_BASE_URL}/data/routes`, {
+    console.log('[dataService] Fetching routes from:', `${appConfig.apiBaseUrl}/data/routes`);
+    const response = await authFetch(`${appConfig.apiBaseUrl}/data/routes`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -117,7 +118,7 @@ export async function fetchRoutes(): Promise<FreightRoute[]> {
 
 export async function updateProduct(id: string, updates: Partial<Product>): Promise<Product | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/data/products/${id}`, {
+    const response = await authFetch(`${appConfig.apiBaseUrl}/data/products/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),

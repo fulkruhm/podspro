@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { Product } from "../types.js";
+import { loadAppConfig } from '../config/env.js';
 
 export interface InventoryAnomaly {
   productId: string;
@@ -12,7 +13,8 @@ export interface InventoryAnomaly {
   recommendation: string;
 }
 
-const GEMINI_MODEL = process.env.GEMINI_FAST_MODEL || "gemini-3-flash-preview";
+const appConfig = loadAppConfig();
+const GEMINI_MODEL = appConfig.geminiAnomalyModel;
 const SEVERITY_ORDER: Record<InventoryAnomaly['severity'], number> = {
   high: 0,
   medium: 1,
@@ -203,7 +205,7 @@ const detectAnomaliesLocally = (products: Product[]): InventoryAnomaly[] => {
 };
 
 export async function detectInventoryAnomalies(products: Product[]): Promise<InventoryAnomaly[]> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  const apiKey = appConfig.geminiApiKey;
   if (!apiKey) {
     console.warn("[anomalyService] GEMINI_API_KEY not set. Falling back to local anomaly rules.");
     return detectAnomaliesLocally(products);

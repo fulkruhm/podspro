@@ -8,8 +8,11 @@ import {
   entityIdParamSchema,
 } from '../middleware/validation.js';
 import { strictLimiter } from '../middleware/rateLimiter.js';
+import { requireAnyRole } from '../middleware/authz.js';
 
 export const userRouter = Router();
+
+userRouter.use(requireAnyRole(['sysadmin']));
 
 // Get all users - no sensitive data
 userRouter.get('/', async (_req: Request, res: Response) => {

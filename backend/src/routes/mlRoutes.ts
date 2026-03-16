@@ -8,18 +8,46 @@
 import { Router, Request, Response } from 'express';
 import fetch from 'node-fetch';
 import { mlLimiter } from '../middleware/rateLimiter.js';
+import { requireAnyRole, requireAuthenticatedUser, getIdentity } from '../middleware/authz.js';
+import {
+  validateRequestBody,
+  validateRequestParams,
+  validateRequestQuery,
+  mlAnomalyRequestSchema,
+  mlForecastRequestSchema,
+  mlBatchRequestSchema,
+  mlForecastBatchRequestSchema,
+  forecastReviewQuerySchema,
+  forecastReviewDecisionParamsSchema,
+  forecastReviewDecisionBodySchema,
+  forecastBatchFailedJobsQuerySchema,
+  forecastBatchRetryBodySchema,
+} from '../middleware/validation.js';
 import {
   getLatestBatchJobRun,
   saveStoreProductForecast,
   getForecastReviewItems,
   createForecastReviewDecision,
 } from '../db.js';
-import { startStoreProductForecastBatch, STORE_PRODUCT_FORECAST_JOB_TYPE } from '../services/forecastBatchService.js';
+import { STORE_PRODUCT_FORECAST_JOB_TYPE } from '../services/forecastBatchService.js';
+import {
+  enqueueStoreProductForecastBatch,
+  getForecastBatchQueueStats,
+  getFailedForecastBatchJobs,
+  retryFailedForecastBatchRun,
+} from '../services/forecastBatchQueue.js';
 import { getNextNightlyForecastRun } from '../services/forecastBatchScheduler.js';
+import { buildCacheKey, getCachedJson, setCachedJson } from '../services/redisCache.js';
+import { loadAppConfig } from '../config/env.js';
 
 const router = Router();
+const appConfig = loadAppConfig();
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://ml-service:5000';
+const ML_SERVICE_URL = appConfig.mlServiceUrl;
+const ML_ANOMALY_CACHE_TTL_SECONDS = appConfig.mlAnomalyCacheTtlSeconds;
+const ML_FORECAST_CACHE_TTL_SECONDS = appConfig.mlForecastCacheTtlSeconds;
+const ML_INFO_CACHE_TTL_SECONDS = appConfig.mlInfoCacheTtlSeconds;
+const IS_DEVELOPMENT = appConfig.nodeEnv === 'development';
 
 interface ForecastServiceResponse {
   product_id: string;
@@ -30,9 +58,7 @@ interface ForecastServiceResponse {
   explainability?: string[];
 }
 
-function isAdminRole(role: string | undefined) {
-  return role === 'admin' || role === 'sysadmin';
-}
+router.use(requireAuthenticatedUser);
 
 /**
  * Anomaly Detection Endpoint
@@ -40,12 +66,18 @@ function isAdminRole(role: string | undefined) {
  *
  * Detects anomalies in inventory data using isolation forest
  */
-router.post('/anomalies/detect', mlLimiter, async (req: Request, res: Response) => {
+router.post('/anomalies/detect', mlLimiter, validateRequestBody(mlAnomalyRequestSchema), async (req: Request, res: Response) => {
   try {
     const { datapoints, sensitivity } = req.body;
+    const cacheKey = buildCacheKey('ml:anomalies', {
+      datapoints,
+      sensitivity: sensitivity || 0.05,
+    });
 
-    if (!datapoints || !Array.isArray(datapoints)) {
-      return res.status(400).json({ error: 'Invalid datapoints' });
+    const cached = await getCachedJson<any[]>(cacheKey);
+    if (cached) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.json(cached);
     }
 
     const response = await fetch(`${ML_SERVICE_URL}/api/ml/anomalies/detect`, {
@@ -62,17 +94,19 @@ router.post('/anomalies/detect', mlLimiter, async (req: Request, res: Response) 
       console.error('ML Service error:', error);
       return res.status(response.status).json({
         error: 'Anomaly detection failed',
-        details: process.env.NODE_ENV === 'development' ? error : undefined,
+        details: IS_DEVELOPMENT ? error : undefined,
       });
     }
 
     const results = await response.json();
+    await setCachedJson(cacheKey, results, ML_ANOMALY_CACHE_TTL_SECONDS);
+    res.setHeader('X-Cache', 'MISS');
     res.json(results);
   } catch (error: any) {
     console.error('Anomaly detection error:', error.message);
     res.status(503).json({
       error: 'ML service unavailable',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
@@ -83,7 +117,7 @@ router.post('/anomalies/detect', mlLimiter, async (req: Request, res: Response) 
  *
  * Forecasts future demand using exponential smoothing
  */
-router.post('/forecast', mlLimiter, async (req: Request, res: Response) => {
+router.post('/forecast', mlLimiter, validateRequestBody(mlForecastRequestSchema), async (req: Request, res: Response) => {
   try {
     const {
       product_id,
@@ -95,8 +129,23 @@ router.post('/forecast', mlLimiter, async (req: Request, res: Response) => {
       persist,
     } = req.body;
 
-    if (!historical_demand || !Array.isArray(historical_demand)) {
-      return res.status(400).json({ error: 'Invalid historical_demand' });
+    const shouldUseCache = persist === false;
+    let cacheKey: string | null = null;
+    if (shouldUseCache) {
+      cacheKey = buildCacheKey('ml:forecast', {
+        product_id,
+        store_id,
+        historical_demand,
+        historical_features,
+        future_features,
+        forecast_days: forecast_days || 7,
+      });
+
+      const cached = await getCachedJson<ForecastServiceResponse>(cacheKey);
+      if (cached) {
+        res.setHeader('X-Cache', 'HIT');
+        return res.json(cached);
+      }
     }
 
     const response = await fetch(`${ML_SERVICE_URL}/api/ml/forecast`, {
@@ -117,7 +166,7 @@ router.post('/forecast', mlLimiter, async (req: Request, res: Response) => {
       console.error('ML Service error:', error);
       return res.status(response.status).json({
         error: 'Forecast failed',
-        details: process.env.NODE_ENV === 'development' ? error : undefined,
+        details: IS_DEVELOPMENT ? error : undefined,
       });
     }
 
@@ -136,12 +185,17 @@ router.post('/forecast', mlLimiter, async (req: Request, res: Response) => {
       );
     }
 
+    if (cacheKey) {
+      await setCachedJson(cacheKey, forecast, ML_FORECAST_CACHE_TTL_SECONDS);
+      res.setHeader('X-Cache', 'MISS');
+    }
+
     res.json(forecast);
   } catch (error: any) {
     console.error('Forecast error:', error.message);
     res.status(503).json({
       error: 'ML service unavailable',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
@@ -152,13 +206,13 @@ router.post('/forecast', mlLimiter, async (req: Request, res: Response) => {
  *
  * Uses historical demand at store-product level and persists forecast output.
  */
-router.post('/forecast/batch/store-products', mlLimiter, async (req: Request, res: Response) => {
+router.post(
+  '/forecast/batch/store-products',
+  mlLimiter,
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestBody(mlForecastBatchRequestSchema),
+  async (req: Request, res: Response) => {
   try {
-    const requesterRole = req.header('x-user-role') || undefined;
-    if (!isAdminRole(requesterRole)) {
-      return res.status(403).json({ error: 'Only admin users can trigger forecast batch runs' });
-    }
-
     const historyDays = Number(req.body?.history_days ?? 56);
     const forecastDays = Number(req.body?.forecast_days ?? 14);
     const minHistoryPoints = Number(req.body?.min_history_points ?? 14);
@@ -193,29 +247,38 @@ router.post('/forecast/batch/store-products', mlLimiter, async (req: Request, re
       return res.status(400).json({ error: 'min_history_points must be >= 3' });
     }
 
-    const triggeredBy = req.header('x-user-name') || 'admin_manual';
-    const { runId, execution } = await startStoreProductForecastBatch({
+    const identity = getIdentity(res);
+    const triggeredBy = identity?.username || 'admin_manual';
+    const idempotencyHeader = req.header('idempotency-key') || undefined;
+
+    const { runId, queued, duplicate, execution } = await enqueueStoreProductForecastBatch({
       historyDays,
       forecastDays,
       minHistoryPoints,
       triggeredBy,
       filters,
+      idempotencyKey: idempotencyHeader,
     });
 
-    execution.catch((executionError: any) => {
-      console.error('Background store-product forecast batch failed:', executionError?.message || executionError);
-    });
+    if (execution) {
+      execution.catch((executionError: any) => {
+        console.error('Background store-product forecast batch failed:', executionError?.message || executionError);
+      });
+    }
 
     res.status(202).json({
       run_id: runId,
-      status: 'running',
-      message: 'Forecast batch accepted and running in background',
+      status: queued ? 'queued' : 'running',
+      duplicate,
+      message: queued
+        ? (duplicate ? 'Forecast batch already queued with matching idempotency key' : 'Forecast batch accepted and queued')
+        : 'Forecast batch accepted and running in background',
     });
   } catch (error: any) {
     console.error('Batch store-product forecast error:', error.message);
     res.status(503).json({
       error: 'Batch forecast failed',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
@@ -224,13 +287,8 @@ router.post('/forecast/batch/store-products', mlLimiter, async (req: Request, re
  * Forecast Batch Status Endpoint (admin only)
  * GET /api/ml/forecast/batch/status
  */
-router.get('/forecast/batch/status', mlLimiter, async (req: Request, res: Response) => {
+router.get('/forecast/batch/status', mlLimiter, requireAnyRole(['admin', 'sysadmin']), async (_req: Request, res: Response) => {
   try {
-    const requesterRole = req.header('x-user-role') || undefined;
-    if (!isAdminRole(requesterRole)) {
-      return res.status(403).json({ error: 'Only admin users can view forecast batch status' });
-    }
-
     const latestRun = await getLatestBatchJobRun(STORE_PRODUCT_FORECAST_JOB_TYPE);
     const nextRunAt = getNextNightlyForecastRun();
 
@@ -242,18 +300,82 @@ router.get('/forecast/batch/status', mlLimiter, async (req: Request, res: Respon
     console.error('Forecast batch status error:', error.message);
     res.status(500).json({
       error: 'Failed to fetch forecast batch status',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
 
-router.get('/forecast/review-items', mlLimiter, async (req: Request, res: Response) => {
+router.get('/forecast/batch/queue', mlLimiter, requireAnyRole(['admin', 'sysadmin']), async (_req: Request, res: Response) => {
   try {
-    const requesterRole = req.header('x-user-role') || undefined;
-    if (!isAdminRole(requesterRole)) {
-      return res.status(403).json({ error: 'Only admin users can view forecast review items' });
-    }
+    const queue = await getForecastBatchQueueStats();
+    return res.json({ queue });
+  } catch (error: any) {
+    console.error('Forecast batch queue status error:', error.message);
+    return res.status(500).json({
+      error: 'Failed to fetch forecast batch queue status',
+      message: IS_DEVELOPMENT ? error.message : undefined,
+    });
+  }
+});
 
+router.get(
+  '/forecast/batch/failed-jobs',
+  mlLimiter,
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestQuery(forecastBatchFailedJobsQuerySchema),
+  async (req: Request, res: Response) => {
+    try {
+      const limit = Number(req.query?.limit ?? 20);
+      const jobs = await getFailedForecastBatchJobs(limit);
+      return res.json({ jobs });
+    } catch (error: any) {
+      console.error('Forecast batch failed-jobs error:', error.message);
+      return res.status(500).json({
+        error: 'Failed to fetch failed forecast batch jobs',
+        message: IS_DEVELOPMENT ? error.message : undefined,
+      });
+    }
+  }
+);
+
+router.post(
+  '/forecast/batch/retry',
+  mlLimiter,
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestBody(forecastBatchRetryBodySchema),
+  async (req: Request, res: Response) => {
+    try {
+      const runId = Number(req.body.run_id);
+      const retryResult = await retryFailedForecastBatchRun(runId);
+      if (!retryResult.retried) {
+        return res.status(404).json({
+          error: 'Failed run not found in queue',
+          reason: retryResult.reason,
+        });
+      }
+
+      return res.json({
+        status: 'requeued',
+        run_id: runId,
+        job_id: retryResult.jobId,
+      });
+    } catch (error: any) {
+      console.error('Forecast batch retry error:', error.message);
+      return res.status(500).json({
+        error: 'Failed to retry forecast batch run',
+        message: IS_DEVELOPMENT ? error.message : undefined,
+      });
+    }
+  }
+);
+
+router.get(
+  '/forecast/review-items',
+  mlLimiter,
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestQuery(forecastReviewQuerySchema),
+  async (req: Request, res: Response) => {
+  try {
     const limit = Number(req.query?.limit ?? 50);
     const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(200, Math.floor(limit)) : 50;
 
@@ -263,28 +385,25 @@ router.get('/forecast/review-items', mlLimiter, async (req: Request, res: Respon
     console.error('Forecast review items error:', error.message);
     res.status(500).json({
       error: 'Failed to fetch forecast review items',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
 
-router.post('/forecast/review-items/:productId/:storeId/decision', mlLimiter, async (req: Request, res: Response) => {
+router.post(
+  '/forecast/review-items/:productId/:storeId/decision',
+  mlLimiter,
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestParams(forecastReviewDecisionParamsSchema),
+  validateRequestBody(forecastReviewDecisionBodySchema),
+  async (req: Request, res: Response) => {
   try {
-    const requesterRole = req.header('x-user-role') || undefined;
-    if (!isAdminRole(requesterRole)) {
-      return res.status(403).json({ error: 'Only admin users can submit forecast review decisions' });
-    }
-
     const { productId, storeId } = req.params;
     const decisionStatus = req.body?.decision_status;
     const baselineAdjustmentPct = req.body?.baseline_adjustment_pct;
     const notes = req.body?.notes;
-    const decidedBy = req.header('x-user-name') || 'admin';
-
-    const allowedStatuses = ['accept_model', 'adjust_baseline', 'flag_data_issue', 'request_override'];
-    if (!allowedStatuses.includes(decisionStatus)) {
-      return res.status(400).json({ error: 'Invalid decision_status' });
-    }
+    const identity = getIdentity(res);
+    const decidedBy = identity?.username || 'admin';
 
     let normalizedBaselineAdjustment: number | null | undefined = null;
     if (baselineAdjustmentPct !== undefined && baselineAdjustmentPct !== null && baselineAdjustmentPct !== '') {
@@ -309,7 +428,7 @@ router.post('/forecast/review-items/:productId/:storeId/decision', mlLimiter, as
     console.error('Forecast review decision error:', error.message);
     res.status(500).json({
       error: 'Failed to save forecast review decision',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
@@ -320,7 +439,7 @@ router.post('/forecast/review-items/:productId/:storeId/decision', mlLimiter, as
  *
  * Run multiple analyses (anomalies + forecasts) in one request
  */
-router.post('/batch-analysis', mlLimiter, async (req: Request, res: Response) => {
+router.post('/batch-analysis', mlLimiter, validateRequestBody(mlBatchRequestSchema), async (req: Request, res: Response) => {
   try {
     const response = await fetch(`${ML_SERVICE_URL}/api/ml/batch-analysis`, {
       method: 'POST',
@@ -333,7 +452,7 @@ router.post('/batch-analysis', mlLimiter, async (req: Request, res: Response) =>
       console.error('ML Service error:', error);
       return res.status(response.status).json({
         error: 'Batch analysis failed',
-        details: process.env.NODE_ENV === 'development' ? error : undefined,
+        details: IS_DEVELOPMENT ? error : undefined,
       });
     }
 
@@ -343,7 +462,7 @@ router.post('/batch-analysis', mlLimiter, async (req: Request, res: Response) =>
     console.error('Batch analysis error:', error.message);
     res.status(503).json({
       error: 'ML service unavailable',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
@@ -356,6 +475,13 @@ router.post('/batch-analysis', mlLimiter, async (req: Request, res: Response) =>
  */
 router.get('/info', async (_req: Request, res: Response) => {
   try {
+    const cacheKey = 'ml:info';
+    const cached = await getCachedJson<any>(cacheKey);
+    if (cached) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.json(cached);
+    }
+
     const response = await fetch(`${ML_SERVICE_URL}/api/ml/info`);
 
     if (!response.ok) {
@@ -363,12 +489,14 @@ router.get('/info', async (_req: Request, res: Response) => {
     }
 
     const info = await response.json();
+    await setCachedJson(cacheKey, info, ML_INFO_CACHE_TTL_SECONDS);
+    res.setHeader('X-Cache', 'MISS');
     res.json(info);
   } catch (error: any) {
     console.error('ML info error:', error.message);
     res.status(503).json({
       error: 'ML service unavailable',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });
@@ -393,7 +521,7 @@ router.get('/health', async (_req: Request, res: Response) => {
     res.status(503).json({
       status: 'unhealthy',
       error: 'ML service unreachable',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: IS_DEVELOPMENT ? error.message : undefined,
     });
   }
 });

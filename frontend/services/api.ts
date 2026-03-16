@@ -1,10 +1,12 @@
 // Frontend API service - calls the backend instead of Gemini directly
 // Use relative paths to work with nginx proxy
+import { authFetch } from './authSession';
+
 const API_BASE_URL = '/api';
 
 export const startChat = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/chat/start`, {
+    const response = await authFetch(`${API_BASE_URL}/chat/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -19,7 +21,7 @@ export const startChat = async () => {
 
 export const sendMessage = async (sessionId: string, message: string): Promise<string> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/chat/message`, {
+    const response = await authFetch(`${API_BASE_URL}/chat/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, message }),
@@ -35,7 +37,7 @@ export const sendMessage = async (sessionId: string, message: string): Promise<s
 
 export const fetchRealtimeData = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/chat/realtime-data`, {
+    const response = await authFetch(`${API_BASE_URL}/chat/realtime-data`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -49,7 +51,7 @@ export const fetchRealtimeData = async () => {
 
 export const closeChat = async (sessionId: string) => {
   try {
-    await fetch(`${API_BASE_URL}/chat/close`, {
+    await authFetch(`${API_BASE_URL}/chat/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId }),

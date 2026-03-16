@@ -7,8 +7,11 @@ import {
   entityIdParamSchema,
 } from '../middleware/validation.js';
 import { apiLimiter, strictLimiter } from '../middleware/rateLimiter.js';
+import { requireAnyRole, requireAuthenticatedUser } from '../middleware/authz.js';
 
 export const dataRouter = Router();
+
+dataRouter.use(requireAuthenticatedUser);
 
 // Get all products
 dataRouter.get('/products', apiLimiter, async (_req: Request, res: Response) => {
@@ -45,6 +48,7 @@ dataRouter.get(
 dataRouter.put(
   '/products/:id',
   strictLimiter,
+  requireAnyRole(['admin', 'sysadmin']),
   validateRequestParams(entityIdParamSchema),
   validateRequestBody(updateProductSchema),
   async (req: Request, res: Response) => {

@@ -1,4 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import { loadAppConfig } from '../config/env.js';
+
+const appConfig = loadAppConfig();
 
 /**
  * Security headers middleware
@@ -27,7 +30,7 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   );
 
   // Strict Transport Security (HTTPS only)
-  if (process.env.NODE_ENV === 'production') {
+  if (appConfig.nodeEnv === 'production') {
     res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
 

@@ -3,7 +3,10 @@
  * Handles communication with Python ML microservice
  */
 
-const ML_API_BASE = '/api/ml';
+import { authFetch } from './authSession';
+import { appConfig } from '../config/appConfig';
+
+const ML_API_BASE = appConfig.mlApiBaseUrl;
 
 // Cache for forecast results to reduce redundant requests
 const forecastCache = new Map<string, { result: ForecastResult; timestamp: number }>();
@@ -126,6 +129,40 @@ export interface ForecastBatchTriggerResponse {
   errors?: Array<{ product_id: string; store_id: string; error: string }>;
 }
 
+export interface ForecastBatchQueueStatsResponse {
+  queue: {
+    mode: 'redis_queue' | 'in_process_fallback';
+    workerInitialized: boolean;
+    counts: {
+      waiting: number;
+      active: number;
+      completed: number;
+      failed: number;
+      delayed: number;
+      paused: number;
+    };
+  };
+}
+
+export interface ForecastBatchFailedJob {
+  jobId: string;
+  runId: number;
+  failedReason: string;
+  attemptsMade: number;
+  attemptsConfigured: number;
+  timestamp: number;
+}
+
+export interface ForecastBatchFailedJobsResponse {
+  jobs: ForecastBatchFailedJob[];
+}
+
+export interface ForecastBatchRetryResponse {
+  status: 'requeued';
+  run_id: number;
+  job_id: string;
+}
+
 export interface ForecastReviewItem {
   product_id: string;
   product_name: string;
@@ -169,7 +206,7 @@ export interface ForecastReviewDecisionResponse {
  */
 export async function checkMLHealth(): Promise<MLServiceHealth> {
   try {
-    const response = await fetch(`${ML_API_BASE}/health`);
+    const response = await authFetch(`${ML_API_BASE}/health`);
     if (!response.ok) throw new Error('ML service unhealthy');
     return await response.json();
   } catch (error) {
@@ -183,7 +220,7 @@ export async function checkMLHealth(): Promise<MLServiceHealth> {
  */
 export async function getMLServiceInfo(): Promise<MLServiceInfo> {
   try {
-    const response = await fetch(`${ML_API_BASE}/info`);
+    const response = await authFetch(`${ML_API_BASE}/info`);
     if (!response.ok) throw new Error('Failed to fetch ML service info');
     return await response.json();
   } catch (error) {
@@ -200,7 +237,7 @@ export async function detectAnomalies(
   sensitivity = 0.05
 ): Promise<AnomalyResult[]> {
   try {
-    const response = await fetch(`${ML_API_BASE}/anomalies/detect`, {
+    const response = await authFetch(`${ML_API_BASE}/anomalies/detect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -239,7 +276,7 @@ export async function forecastDemand(
 
   // Fetch with retry logic
   return retryWithBackoff(async () => {
-    const response = await fetch(`${ML_API_BASE}/forecast`, {
+    const response = await authFetch(`${ML_API_BASE}/forecast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -279,7 +316,7 @@ export async function runBatchAnalysis(
   forecasts?: ForecastRequest[]
 ) {
   try {
-    const response = await fetch(`${ML_API_BASE}/batch-analysis`, {
+    const response = await authFetch(`${ML_API_BASE}/batch-analysis`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -304,14 +341,11 @@ export async function runBatchAnalysis(
  * Get latest forecast batch run status (admin only)
  */
 export async function getForecastBatchStatus(
-  userRole: string
+  _userRole: string
 ): Promise<ForecastBatchStatusResponse> {
-  const response = await fetch(`${ML_API_BASE}/forecast/batch/status`, {
+  const response = await authFetch(`${ML_API_BASE}/forecast/batch/status`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-user-role': userRole,
-    },
+    headers: { 'Content-Type': 'application/json' },
   });
 
   if (!response.ok) {
@@ -326,8 +360,8 @@ export async function getForecastBatchStatus(
  * Trigger forecast batch run manually (admin only)
  */
 export async function triggerForecastBatchRun(
-  userRole: string,
-  userName: string,
+  _userRole: string,
+  _userName: string,
   options?: {
     history_days?: number;
     forecast_days?: number;
@@ -341,13 +375,9 @@ export async function triggerForecastBatchRun(
     };
   }
 ): Promise<ForecastBatchTriggerResponse> {
-  const response = await fetch(`${ML_API_BASE}/forecast/batch/store-products`, {
+  const response = await authFetch(`${ML_API_BASE}/forecast/batch/store-products`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-user-role': userRole,
-      'x-user-name': userName,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(options || {}),
   });
 
@@ -360,14 +390,13 @@ export async function triggerForecastBatchRun(
 }
 
 export async function getForecastReviewItems(
-  userRole: string,
+  _userRole: string,
   limit = 50
 ): Promise<ForecastReviewItemsResponse> {
-  const response = await fetch(`${ML_API_BASE}/forecast/review-items?limit=${encodeURIComponent(String(limit))}&_=${Date.now()}`, {
+  const response = await authFetch(`${ML_API_BASE}/forecast/review-items?limit=${encodeURIComponent(String(limit))}&_=${Date.now()}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-role': userRole,
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
     },
@@ -383,8 +412,8 @@ export async function getForecastReviewItems(
 }
 
 export async function submitForecastReviewDecision(
-  userRole: string,
-  userName: string,
+  _userRole: string,
+  _userName: string,
   input: {
     productId: string;
     storeId: string;
@@ -393,13 +422,9 @@ export async function submitForecastReviewDecision(
     notes?: string;
   }
 ): Promise<ForecastReviewDecisionResponse> {
-  const response = await fetch(`${ML_API_BASE}/forecast/review-items/${encodeURIComponent(input.productId)}/${encodeURIComponent(input.storeId)}/decision`, {
+  const response = await authFetch(`${ML_API_BASE}/forecast/review-items/${encodeURIComponent(input.productId)}/${encodeURIComponent(input.storeId)}/decision`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-user-role': userRole,
-      'x-user-name': userName,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       decision_status: input.decision_status,
       baseline_adjustment_pct: input.baseline_adjustment_pct,
@@ -410,6 +435,49 @@ export async function submitForecastReviewDecision(
   if (!response.ok) {
     const error = await response.text();
     throw new Error(`Failed to submit forecast review decision: ${error}`);
+  }
+
+  return await response.json();
+}
+
+export async function getForecastBatchQueueStats(): Promise<ForecastBatchQueueStatsResponse> {
+  const response = await authFetch(`${ML_API_BASE}/forecast/batch/queue`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to fetch forecast batch queue stats: ${error}`);
+  }
+
+  return await response.json();
+}
+
+export async function getForecastBatchFailedJobs(limit = 20): Promise<ForecastBatchFailedJobsResponse> {
+  const response = await authFetch(`${ML_API_BASE}/forecast/batch/failed-jobs?limit=${encodeURIComponent(String(limit))}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to fetch forecast batch failed jobs: ${error}`);
+  }
+
+  return await response.json();
+}
+
+export async function retryForecastBatchRun(runId: number): Promise<ForecastBatchRetryResponse> {
+  const response = await authFetch(`${ML_API_BASE}/forecast/batch/retry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_id: runId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to retry forecast batch run: ${error}`);
   }
 
   return await response.json();

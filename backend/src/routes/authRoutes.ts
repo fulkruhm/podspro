@@ -1,8 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getUserByUsername } from '../db.js';
-import { validateRequestBody } from '../middleware/validation.js';
+import {
+  getUserByUsername,
+  storeRefreshToken,
+  getRefreshTokenRecord,
+  revokeRefreshToken,
+  revokeAccessToken,
+  cleanupExpiredAuthTokens,
+} from '../db.js';
+import { validateRequestBody, authRefreshSchema, authLogoutSchema } from '../middleware/validation.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
+import { signAuthToken, signRefreshToken, verifyAuthToken } from '../auth/token.js';
+import { requireAuthenticatedUser, getIdentity } from '../middleware/authz.js';
 
 export const authRouter = Router();
 
@@ -49,7 +58,34 @@ authRouter.post(
 
       // Return user without password
       const { password: _, ...userWithoutPassword } = user;
+      const { token, expiresInSeconds, tokenId } = signAuthToken({
+        sub: userWithoutPassword.id,
+        username: userWithoutPassword.username,
+        role: userWithoutPassword.role,
+        name: userWithoutPassword.name,
+        status: userWithoutPassword.status,
+      });
+      const refreshTokenResult = signRefreshToken({
+        sub: userWithoutPassword.id,
+        username: userWithoutPassword.username,
+        role: userWithoutPassword.role,
+        name: userWithoutPassword.name,
+        status: userWithoutPassword.status,
+      });
+
+      await cleanupExpiredAuthTokens();
+      await storeRefreshToken({
+        tokenId: refreshTokenResult.tokenId,
+        userId: userWithoutPassword.id,
+        username: userWithoutPassword.username,
+        expiresAtIso: new Date((Math.floor(Date.now() / 1000) + refreshTokenResult.expiresInSeconds) * 1000).toISOString(),
+      });
+
       res.json({ 
+        token,
+        refreshToken: refreshTokenResult.token,
+        expiresInSeconds,
+        tokenId,
         user: {
           id: userWithoutPassword.id,
           name: userWithoutPassword.name,
@@ -67,3 +103,105 @@ authRouter.post(
     }
   }
 );
+
+authRouter.post('/refresh', authLimiter, validateRequestBody(authRefreshSchema), async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    const payload = verifyAuthToken(refreshToken);
+    if (!payload || payload.tokenType !== 'refresh') {
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    const record = await getRefreshTokenRecord(payload.jti);
+    if (!record) {
+      return res.status(401).json({ error: 'Refresh token not recognized' });
+    }
+
+    if (record.revoked_at) {
+      return res.status(401).json({ error: 'Refresh token revoked' });
+    }
+
+    if (new Date(record.expires_at).getTime() <= Date.now()) {
+      await revokeRefreshToken(payload.jti);
+      return res.status(401).json({ error: 'Refresh token expired' });
+    }
+
+    const nextAccess = signAuthToken({
+      sub: payload.sub,
+      username: payload.username,
+      role: payload.role,
+      name: payload.name,
+      status: payload.status,
+    });
+    const nextRefresh = signRefreshToken({
+      sub: payload.sub,
+      username: payload.username,
+      role: payload.role,
+      name: payload.name,
+      status: payload.status,
+    });
+
+    await revokeRefreshToken(payload.jti, nextRefresh.tokenId);
+    await storeRefreshToken({
+      tokenId: nextRefresh.tokenId,
+      userId: payload.sub,
+      username: payload.username,
+      expiresAtIso: new Date((Math.floor(Date.now() / 1000) + nextRefresh.expiresInSeconds) * 1000).toISOString(),
+    });
+
+    return res.json({
+      token: nextAccess.token,
+      refreshToken: nextRefresh.token,
+      expiresInSeconds: nextAccess.expiresInSeconds,
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    return res.status(500).json({ error: 'Failed to refresh session' });
+  }
+});
+
+authRouter.post('/logout', requireAuthenticatedUser, validateRequestBody(authLogoutSchema), async (req: Request, res: Response) => {
+  try {
+    const identity = getIdentity(res);
+    if (!identity) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    await revokeAccessToken({
+      tokenId: identity.tokenId,
+      userId: identity.userId,
+      expiresAtIso: new Date(identity.expiresAt * 1000).toISOString(),
+    });
+
+    const providedRefreshToken = req.body?.refreshToken;
+    if (providedRefreshToken) {
+      const payload = verifyAuthToken(providedRefreshToken);
+      if (payload && payload.tokenType === 'refresh') {
+        await revokeRefreshToken(payload.jti);
+      }
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return res.status(500).json({ error: 'Failed to logout' });
+  }
+});
+
+authRouter.get('/validate', requireAuthenticatedUser, (req: Request, res: Response) => {
+  const identity = getIdentity(res);
+  if (!identity) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  return res.json({
+    valid: true,
+    user: {
+      id: identity.userId,
+      username: identity.username,
+      name: identity.name,
+      role: identity.role,
+      status: identity.status,
+    },
+  });
+});

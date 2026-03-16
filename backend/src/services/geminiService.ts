@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Chat, Type } from "@google/genai";
 import { getProducts, getRoutes } from '../db.js';
+import { loadAppConfig } from '../config/env.js';
 
 export type ModelTier = 'fast' | 'pro';
 type DemoChat = {
@@ -9,8 +10,9 @@ type DemoChat = {
 };
 export type ChatLike = Chat | DemoChat;
 
-const FAST_MODEL = process.env.GEMINI_FAST_MODEL || 'gemini-3.1-pro-preview';
-const PRO_MODEL = process.env.GEMINI_PRO_MODEL || 'gemini-3.1-pro-preview';
+const appConfig = loadAppConfig();
+const FAST_MODEL = appConfig.geminiFastModel;
+const PRO_MODEL = appConfig.geminiProModel;
 const COMPLEX_QUERY_PATTERN = /(optimi|forecast|multi|portfolio|scenario|root cause|sensitivity|what-if|simulation|constraints|allocation|network)/i;
 
 const SYSTEM_PROMPT = `
@@ -34,7 +36,7 @@ Always consider the hierarchy:
 
 // Use either API_KEY or GEMINI_API_KEY environment variable
 const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  const apiKey = appConfig.geminiApiKey;
   if (!apiKey) {
     console.warn('[geminiService] GEMINI_API_KEY not set - chat will work in demo mode');
     return null;

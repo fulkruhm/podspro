@@ -1,15 +1,14 @@
-import { executeStoreProductForecastBatch } from './forecastBatchService.js';
+import { enqueueStoreProductForecastBatch } from './forecastBatchQueue.js';
+import { loadAppConfig } from '../config/env.js';
 
 let schedulerTimer: NodeJS.Timeout | null = null;
 let nextRunAt: Date | null = null;
 
 function getScheduleConfig() {
-  const hour = Number(process.env.FORECAST_BATCH_HOUR ?? 2);
-  const minute = Number(process.env.FORECAST_BATCH_MINUTE ?? 0);
-
+  const appConfig = loadAppConfig();
   return {
-    hour: Number.isFinite(hour) ? Math.min(23, Math.max(0, hour)) : 2,
-    minute: Number.isFinite(minute) ? Math.min(59, Math.max(0, minute)) : 0,
+    hour: appConfig.forecastBatchHour,
+    minute: appConfig.forecastBatchMinute,
   };
 }
 
@@ -36,10 +35,12 @@ function scheduleNextRun() {
 
   schedulerTimer = setTimeout(async () => {
     try {
-      await executeStoreProductForecastBatch({
+      const dateKey = new Date().toISOString().slice(0, 10);
+      await enqueueStoreProductForecastBatch({
         triggeredBy: 'scheduler:nightly',
+        idempotencyKey: `scheduler:${dateKey}`,
       });
-      console.log('✓ Nightly store-product forecast batch completed');
+      console.log('✓ Nightly store-product forecast batch submitted');
     } catch (error: any) {
       console.error('Nightly forecast batch failed:', error?.message || error);
     } finally {

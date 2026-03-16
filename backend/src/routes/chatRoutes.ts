@@ -6,8 +6,13 @@ import {
   chatCloseSchema,
 } from '../middleware/validation.js';
 import { apiLimiter, strictLimiter } from '../middleware/rateLimiter.js';
+import { requireAuthenticatedUser } from '../middleware/authz.js';
+import { loadAppConfig } from '../config/env.js';
 
 export const chatRouter = Router();
+const appConfig = loadAppConfig();
+
+chatRouter.use(requireAuthenticatedUser);
 
 interface ChatSession {
   createdAt: Date;
@@ -79,7 +84,7 @@ chatRouter.post(
       }
 
       const timeoutMs = Number(
-        process.env.AI_RESPONSE_TIMEOUT_MS || (session.modelTier === 'pro' ? '150000' : '90000')
+        appConfig.aiResponseTimeoutMs ?? (session.modelTier === 'pro' ? 150000 : 90000)
       );
       let response = await withTimeout(sendMessage(session.chat, message), timeoutMs);
 
@@ -140,7 +145,7 @@ chatRouter.post(
       res.flushHeaders?.();
 
       const timeoutMs = Number(
-        process.env.AI_RESPONSE_TIMEOUT_MS || (session.modelTier === 'pro' ? '150000' : '90000')
+        appConfig.aiResponseTimeoutMs ?? (session.modelTier === 'pro' ? 150000 : 90000)
       );
       await withTimeout(
         streamMessage(session.chat, message, (chunk) => {

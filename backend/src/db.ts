@@ -1,8 +1,11 @@
 import pkg from 'pg';
+import { loadAppConfig } from './config/env.js';
 const { Pool } = pkg;
 
+const appConfig = loadAppConfig();
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://pods_user:pods_password@localhost:5432/pods_db',
+  connectionString: appConfig.databaseUrl,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -14,10 +17,9 @@ pool.on('error', (err: Error) => {
 
 export type BatchJobStatus = 'running' | 'success' | 'failed' | 'partial_success';
 
-const configuredStaleBatchRunMinutes = Number(process.env.BATCH_RUN_STALE_MINUTES ?? 45);
-const BATCH_RUN_STALE_MINUTES = Number.isFinite(configuredStaleBatchRunMinutes) && configuredStaleBatchRunMinutes > 0
-  ? Math.floor(configuredStaleBatchRunMinutes)
-  : 45;
+let databaseInitialized = false;
+
+const BATCH_RUN_STALE_MINUTES = appConfig.batchRunStaleMinutes;
 
 // Wait for database to be ready
 async function waitForDatabase(maxRetries = 30, delayMs = 1000) {
@@ -103,6 +105,37 @@ async function ensureForecastReviewDecisionTable() {
   );
 }
 
+async function ensureAuthTokenTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+      token_id UUID PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      username VARCHAR(255) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      revoked_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      replaced_by_token_id UUID
+    )
+  `);
+
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_id ON auth_refresh_tokens(user_id, created_at DESC)'
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS auth_revoked_access_tokens (
+      token_id UUID PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMP NOT NULL,
+      revoked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_auth_revoked_access_tokens_expires ON auth_revoked_access_tokens(expires_at)'
+  );
+}
+
 // Initialize database connection on startup
 async function initializeDatabase() {
   try {
@@ -111,13 +144,29 @@ async function initializeDatabase() {
     await ensureForecastExplainabilityColumn();
     await ensureDemandFeatureTable();
     await ensureForecastReviewDecisionTable();
+    await ensureAuthTokenTables();
+    databaseInitialized = true;
   } catch (err) {
+    databaseInitialized = false;
     console.error('Fatal: Could not initialize database:', err);
     process.exit(1);
   }
 }
 
 initializeDatabase();
+
+export async function checkDatabaseReadiness() {
+  if (!databaseInitialized) {
+    return false;
+  }
+
+  try {
+    await pool.query('SELECT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function createBatchJobRun(jobType: string, triggeredBy?: string) {
   const result = await pool.query(`
@@ -891,6 +940,74 @@ export async function deleteUser(id: string) {
     console.error('Error deleting user:', error);
     throw error;
   }
+}
+
+export async function storeRefreshToken(input: {
+  tokenId: string;
+  userId: string;
+  username: string;
+  expiresAtIso: string;
+}) {
+  await pool.query(
+    `
+      INSERT INTO auth_refresh_tokens (token_id, user_id, username, expires_at)
+      VALUES ($1, $2, $3, $4)
+    `,
+    [input.tokenId, input.userId, input.username, input.expiresAtIso]
+  );
+}
+
+export async function getRefreshTokenRecord(tokenId: string) {
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM auth_refresh_tokens
+      WHERE token_id = $1
+      LIMIT 1
+    `,
+    [tokenId]
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function revokeRefreshToken(tokenId: string, replacedByTokenId?: string) {
+  await pool.query(
+    `
+      UPDATE auth_refresh_tokens
+      SET revoked_at = COALESCE(revoked_at, NOW()), replaced_by_token_id = COALESCE($2, replaced_by_token_id)
+      WHERE token_id = $1
+    `,
+    [tokenId, replacedByTokenId ?? null]
+  );
+}
+
+export async function revokeAccessToken(input: { tokenId: string; userId: string; expiresAtIso: string }) {
+  await pool.query(
+    `
+      INSERT INTO auth_revoked_access_tokens (token_id, user_id, expires_at)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (token_id) DO NOTHING
+    `,
+    [input.tokenId, input.userId, input.expiresAtIso]
+  );
+}
+
+export async function isAccessTokenRevoked(tokenId: string) {
+  const result = await pool.query(
+    `
+      SELECT 1
+      FROM auth_revoked_access_tokens
+      WHERE token_id = $1
+      LIMIT 1
+    `,
+    [tokenId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function cleanupExpiredAuthTokens() {
+  await pool.query('DELETE FROM auth_revoked_access_tokens WHERE expires_at < NOW()');
+  await pool.query('DELETE FROM auth_refresh_tokens WHERE expires_at < NOW()');
 }
 
 export async function closePool() {

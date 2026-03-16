@@ -5,8 +5,14 @@ import {
   getForecastReviewItems,
   submitForecastReviewDecision,
   triggerForecastBatchRun,
+  getForecastBatchQueueStats,
+  getForecastBatchFailedJobs,
+  retryForecastBatchRun,
+  ForecastBatchQueueStatsResponse,
+  ForecastBatchFailedJob,
 } from '../services/mlService';
 import { getDisplayedReviewItems } from './forecastReviewUtils';
+import { appConfig } from '../config/appConfig';
 
 interface ForecastReviewViewProps {
   userRole: Role;
@@ -31,6 +37,11 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
   const [decisionLoadingKey, setDecisionLoadingKey] = React.useState<string | null>(null);
   const [batchRefreshing, setBatchRefreshing] = React.useState(false);
   const [currentPage, setCurrentPage] = React.useState(1);
+  const [queueStats, setQueueStats] = React.useState<ForecastBatchQueueStatsResponse['queue'] | null>(null);
+  const [failedQueueJobs, setFailedQueueJobs] = React.useState<ForecastBatchFailedJob[]>([]);
+  const [queueLoading, setQueueLoading] = React.useState(false);
+  const [retryingRunId, setRetryingRunId] = React.useState<number | null>(null);
+  const queueRefreshInFlightRef = React.useRef(false);
 
   const PAGE_SIZE = 15;
 
@@ -47,9 +58,48 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
     }
   }, [userRole]);
 
+  const loadQueueMonitoring = React.useCallback(async () => {
+    if (queueRefreshInFlightRef.current) {
+      return;
+    }
+
+    queueRefreshInFlightRef.current = true;
+    setQueueLoading(true);
+    try {
+      const [queueResponse, failedResponse] = await Promise.all([
+        getForecastBatchQueueStats(),
+        getForecastBatchFailedJobs(appConfig.forecastQueueFailedJobsLimit),
+      ]);
+      setQueueStats(queueResponse.queue);
+      setFailedQueueJobs(failedResponse.jobs || []);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load queue monitoring data');
+    } finally {
+      setQueueLoading(false);
+      queueRefreshInFlightRef.current = false;
+    }
+  }, []);
+
   React.useEffect(() => {
     loadItems();
-  }, [loadItems]);
+    loadQueueMonitoring();
+  }, [loadItems, loadQueueMonitoring]);
+
+  React.useEffect(() => {
+    const refreshMs = appConfig.forecastQueueMonitorRefreshMs;
+    if (refreshMs <= 0) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      void loadQueueMonitoring();
+    }, refreshMs);
+
+    return () => clearInterval(intervalId);
+  }, [loadQueueMonitoring]);
 
   const handleSubmitDecision = async (
     item: ForecastReviewItem,
@@ -68,6 +118,7 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
         notes: `Submitted from Forecast Review page. Bias ${Number(item.bias_pct).toFixed(1)}%, score ${Number(item.anomaly_score).toFixed(1)}.`,
       });
       await loadItems();
+      await loadQueueMonitoring();
     } catch (err: any) {
       setError(err?.message || 'Failed to submit review decision');
     } finally {
@@ -92,6 +143,7 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
         },
       });
       await loadItems();
+      await loadQueueMonitoring();
       Promise.resolve(onRefreshData?.()).catch((refreshError: any) => {
         console.error('Global refresh after forecast batch trigger failed:', refreshError?.message || refreshError);
       });
@@ -99,6 +151,19 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
       setError(err?.message || 'Failed to refresh forecast data');
     } finally {
       setBatchRefreshing(false);
+    }
+  };
+
+  const handleRetryFailedRun = async (runId: number) => {
+    setRetryingRunId(runId);
+    setError(null);
+    try {
+      await retryForecastBatchRun(runId);
+      await loadQueueMonitoring();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to retry forecast batch run');
+    } finally {
+      setRetryingRunId(null);
     }
   };
 
@@ -156,6 +221,84 @@ const ForecastReviewView: React.FC<ForecastReviewViewProps> = ({
           {error}
         </div>
       )}
+
+      <div className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Forecast Queue Monitor</p>
+          <button
+            onClick={loadQueueMonitoring}
+            disabled={queueLoading}
+            className="px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {queueLoading ? 'Refreshing...' : 'Refresh Queue Monitor'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
+          <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Mode</p>
+            <p className="text-sm font-bold text-slate-800">{queueStats?.mode || 'n/a'}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Waiting</p>
+            <p className="text-sm font-bold text-slate-800">{queueStats?.counts.waiting ?? 0}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Active</p>
+            <p className="text-sm font-bold text-slate-800">{queueStats?.counts.active ?? 0}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Failed</p>
+            <p className="text-sm font-bold text-red-700">{queueStats?.counts.failed ?? 0}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Delayed</p>
+            <p className="text-sm font-bold text-slate-800">{queueStats?.counts.delayed ?? 0}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Completed</p>
+            <p className="text-sm font-bold text-emerald-700">{queueStats?.counts.completed ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-[11px]">
+            <thead>
+              <tr className="text-slate-500 uppercase tracking-wider">
+                <th className="text-left py-1 pr-2">Run ID</th>
+                <th className="text-left py-1 pr-2">Reason</th>
+                <th className="text-right py-1 pr-2">Attempts</th>
+                <th className="text-left py-1 pr-2">When</th>
+                <th className="text-left py-1">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {failedQueueJobs.map((job) => (
+                <tr key={job.jobId} className="border-t border-slate-200 text-slate-700">
+                  <td className="py-2 pr-2 font-medium">{job.runId}</td>
+                  <td className="py-2 pr-2 max-w-[320px] truncate" title={job.failedReason}>{job.failedReason}</td>
+                  <td className="py-2 pr-2 text-right">{job.attemptsMade}/{job.attemptsConfigured}</td>
+                  <td className="py-2 pr-2">{new Date(job.timestamp).toLocaleString()}</td>
+                  <td className="py-2">
+                    <button
+                      onClick={() => handleRetryFailedRun(job.runId)}
+                      disabled={retryingRunId === job.runId}
+                      className="px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 disabled:opacity-60"
+                    >
+                      {retryingRunId === job.runId ? 'Retrying...' : 'Retry'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!queueLoading && failedQueueJobs.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-3 text-slate-500 text-center">No failed queue jobs.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-2">

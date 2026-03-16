@@ -210,7 +210,32 @@ Open **http://localhost** — you're running.
 PORT=3001
 DATABASE_URL=postgresql://user:password@localhost:5432/pods
 GEMINI_API_KEY=your_key_here
+GEMINI_FAST_MODEL=gemini-3.1-pro-preview
+GEMINI_PRO_MODEL=gemini-3.1-pro-preview
+GEMINI_ANOMALY_MODEL=gemini-3-flash-preview
 NODE_ENV=development
+ML_SERVICE_URL=http://ml-service:5000
+FRONTEND_URL=http://localhost:5173
+AUTH_SECRET=replace_with_long_random_secret
+AUTH_TOKEN_TTL_MINUTES=480
+REFRESH_TOKEN_TTL_MINUTES=10080
+AI_RESPONSE_TIMEOUT_MS=120000
+REDIS_URL=redis://localhost:6379
+BATCH_RUN_STALE_MINUTES=45
+ML_ANOMALY_CACHE_TTL_SECONDS=120
+ML_FORECAST_CACHE_TTL_SECONDS=300
+ML_INFO_CACHE_TTL_SECONDS=600
+FORECAST_BATCH_QUEUE_ATTEMPTS=3
+FORECAST_BATCH_QUEUE_BACKOFF_MS=5000
+FORECAST_BATCH_QUEUE_CONCURRENCY=1
+FORECAST_BATCH_HOUR=2
+FORECAST_BATCH_MINUTE=0
+```
+
+**ML Service `.env`**
+```env
+# Comma-separated CORS origins, supports '*' for fully open mode
+CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 **Frontend `.env`**
@@ -218,10 +243,72 @@ NODE_ENV=development
 VITE_API_BASE_URL=http://localhost:3001/api
 ```
 
+Note: frontend runtime configuration is currently maintained in `frontend/config/appConfig.ts`.
+`VITE_API_BASE_URL` is not used by the current frontend code path.
+
 ```bash
 npm install
 npm run dev
 ```
+
+---
+
+## Configuration Matrix
+
+Configuration is maintained in a single source per runtime:
+
+- Backend: `backend/src/config/env.ts`
+- Frontend: `frontend/config/appConfig.ts`
+- ML Service: `ml-service/config.py`
+
+### Backend (Node/Express)
+
+| Variable | Default | Source of truth | Notes |
+|---|---|---|---|
+| `PORT` | `3001` | `backend/src/config/env.ts` | API listen port |
+| `NODE_ENV` | `development` | `backend/src/config/env.ts` | `development \| test \| production` |
+| `FRONTEND_URL` | unset | `backend/src/config/env.ts` | Optional extra CORS origin |
+| `DATABASE_URL` | `postgresql://pods_user:pods_password@localhost:5432/pods_db` | `backend/src/config/env.ts` | Postgres connection |
+| `ML_SERVICE_URL` | `http://ml-service:5000` | `backend/src/config/env.ts` | ML upstream base URL |
+| `REDIS_URL` | unset | `backend/src/config/env.ts` | Enables Redis queue/cache mode |
+| `AUTH_SECRET` | `pods-dev-auth-secret-change-me` | `backend/src/config/env.ts` | Must be overridden in production |
+| `AUTH_TOKEN_TTL_MINUTES` | `480` | `backend/src/config/env.ts` | Access token TTL |
+| `REFRESH_TOKEN_TTL_MINUTES` | `10080` | `backend/src/config/env.ts` | Refresh token TTL |
+| `FORECAST_BATCH_QUEUE_ATTEMPTS` | `3` | `backend/src/config/env.ts` | BullMQ retry attempts |
+| `FORECAST_BATCH_QUEUE_BACKOFF_MS` | `5000` | `backend/src/config/env.ts` | Retry backoff base delay |
+| `FORECAST_BATCH_QUEUE_CONCURRENCY` | `1` | `backend/src/config/env.ts` | Worker concurrency |
+| `FORECAST_BATCH_HOUR` | `2` | `backend/src/config/env.ts` | Scheduler UTC hour |
+| `FORECAST_BATCH_MINUTE` | `0` | `backend/src/config/env.ts` | Scheduler UTC minute |
+| `BATCH_RUN_STALE_MINUTES` | `45` | `backend/src/config/env.ts` | Running batch stale timeout |
+| `ML_ANOMALY_CACHE_TTL_SECONDS` | `120` | `backend/src/config/env.ts` | Anomaly response cache TTL |
+| `ML_FORECAST_CACHE_TTL_SECONDS` | `300` | `backend/src/config/env.ts` | Forecast response cache TTL |
+| `ML_INFO_CACHE_TTL_SECONDS` | `600` | `backend/src/config/env.ts` | ML info response cache TTL |
+| `AI_RESPONSE_TIMEOUT_MS` | unset | `backend/src/config/env.ts` | Overrides per-tier chat timeout when provided |
+| `GEMINI_API_KEY` / `API_KEY` | unset | `backend/src/config/env.ts` | `GEMINI_API_KEY` preferred, falls back to `API_KEY` |
+| `GEMINI_FAST_MODEL` | `gemini-3.1-pro-preview` | `backend/src/config/env.ts` | Chat fast-tier model |
+| `GEMINI_PRO_MODEL` | `gemini-3.1-pro-preview` | `backend/src/config/env.ts` | Chat pro-tier model |
+| `GEMINI_ANOMALY_MODEL` | `gemini-3-flash-preview` | `backend/src/config/env.ts` | Model used for anomaly analysis |
+
+All backend runtime configuration now resolves through `backend/src/config/env.ts`.
+
+### Frontend (React)
+
+| Key | Default | Source of truth | Notes |
+|---|---|---|---|
+| `apiBaseUrl` | `/api` | `frontend/config/appConfig.ts` | Backend proxy base path |
+| `mlApiBaseUrl` | `/api/ml` | `frontend/config/appConfig.ts` | ML proxy base path |
+| `forecastQueueMonitorRefreshMs` | `30000` | `frontend/config/appConfig.ts` | Queue monitor auto-refresh interval |
+| `forecastQueueFailedJobsLimit` | `20` | `frontend/config/appConfig.ts` | Failed jobs fetch limit |
+
+### ML Service (FastAPI)
+
+| Variable | Default | Source of truth | Notes |
+|---|---|---|---|
+| `ML_SERVICE_NAME` | `PODS ML Service` | `ml-service/config.py` | Used in health/info metadata |
+| `ML_SERVICE_VERSION` | `1.0.0` | `ml-service/config.py` | Reported by info endpoint |
+| `ML_SERVICE_HOST` | `0.0.0.0` | `ml-service/config.py` | Uvicorn bind host |
+| `ML_SERVICE_PORT` | `5000` | `ml-service/config.py` | Uvicorn bind port |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://localhost:5173` | `ml-service/config.py` | Comma-separated list or `*` |
 
 ---
 
@@ -235,6 +322,7 @@ docker-compose up --build
 |---|---|
 | Frontend | http://localhost:5173 |
 | API | http://localhost:3001/api |
+| Redis | redis://localhost:6379 |
 | Nginx Proxy | http://localhost |
 
 ---
@@ -245,6 +333,20 @@ docker-compose up --build
 ```
 POST  /api/auth/login         — Login with rate limiting & exponential backoff
 GET   /api/auth/validate      — Validate JWT token
+POST  /api/auth/refresh       — Rotate refresh token and issue new access token
+POST  /api/auth/logout        — Revoke current access token + optional refresh token
+```
+
+**Platform Health**
+```
+GET   /api/health             — Backend liveness (process uptime and environment)
+GET   /api/ready              — Backend readiness (database + ML dependency checks)
+GET   /api/v1/health          — Versioned backend liveness endpoint
+GET   /api/v1/ready           — Versioned backend readiness endpoint
+GET   /api/openapi.json       — OpenAPI 3.0 contract (current + v1 paths)
+GET   /api/v1/openapi.json    — OpenAPI 3.0 contract (versioned access)
+GET   /health                 — ML service liveness endpoint
+GET   /ready                  — ML service readiness endpoint
 ```
 
 **AI Advisor**
@@ -258,9 +360,30 @@ GET   /api/chat/realtime-data — Fetch live inventory & logistics data
 ```
 POST  /api/ml/anomalies/detect  — Run Isolation Forest anomaly detection
 POST  /api/ml/forecast          — Generate demand forecast with confidence intervals
+POST  /api/ml/forecast/batch/store-products — Queue durable forecast batch run (admin/sysadmin)
+GET   /api/ml/forecast/batch/queue          — Queue depth/health metrics (admin/sysadmin)
+GET   /api/ml/forecast/batch/failed-jobs    — Failed queue jobs for diagnostics (admin/sysadmin)
+POST  /api/ml/forecast/batch/retry          — Retry failed run by run_id (admin/sysadmin)
 GET   /api/ml/health            — ML service health check
 GET   /api/ml/info              — Service capabilities and model info
 ```
+
+`POST /api/ml/forecast/batch/store-products` supports optional `Idempotency-Key` header for deduplicating repeated trigger requests.
+
+All backend APIs are now available under both unversioned and versioned paths:
+
+```
+/api/...     (existing)
+/api/v1/...  (new, versioned)
+```
+
+Authenticated backend routes enforce role-aware access using request headers:
+
+```
+Authorization: Bearer <signed_token_from_/api/auth/login>
+```
+
+Sensitive endpoints (for example `/api/users/*` and ML forecast batch/review endpoints) now reject missing, invalid, expired, or unauthorized tokens with `401/403`.
 
 **User Management** *(Admin only)*
 ```
@@ -295,11 +418,17 @@ PODS is designed to stay operational under degraded conditions.
 
 **Graceful AI Degradation** — When the Gemini API is unavailable, the system automatically falls back to live database snapshots. Operators never face a broken experience.
 
-**Health Monitoring** — All services expose `/health` endpoints. Docker Compose health checks ensure dependent services only start when dependencies are ready.
+**Health Monitoring** — Backend now exposes both `/api/health` and `/api/ready`. Readiness verifies both database and ML service availability before reporting ready.
 
-**Structured Logging** — Request lifecycle, auth events, and ML inference results are logged with consistent structure, enabling traceability across the Node.js and Python layers.
+Readiness now also reports cache dependency state (`redis`, `memory`, or `degraded`) so operators can detect Redis outages without impacting core service availability.
+
+**Structured Logging** — Request lifecycle logs now include request IDs and timing metadata in both Node.js and Python services, enabling correlation across service boundaries.
 
 **ML Service Isolation** — The Python microservice fails independently. A crash or overload in the ML layer does not affect core inventory, auth, or AI chat functionality.
+
+**Redis-Backed ML Cache** — ML anomaly detection and non-persistent forecasts are cached at the backend layer using Redis (with in-memory fallback), reducing repeated model inference latency and backend-to-ML traffic.
+
+**Durable Forecast Queue** — Store-product forecast batch runs are now enqueued in Redis via BullMQ with retry/backoff semantics and worker-based execution. This prevents dropped jobs during API restarts and supports idempotent trigger handling.
 
 ---
 
@@ -313,11 +442,25 @@ PODS is built with production reliability and maintainability as first-class con
 
 **Input Validation** — All API inputs validated server-side using Zod schemas, ensuring malformed or malicious payloads are rejected before reaching business logic.
 
+Validation schemas are strict (`additionalProperties: false` behavior), so unknown request fields are rejected with explicit validation details.
+
 **Security** — Login endpoint protected with rate limiting and exponential backoff. CORS policies and security headers enforced at the Nginx layer.
 
 **Configuration Management** — All environment-specific values externalized via `.env` files, keeping secrets out of source control and enabling clean dev/staging/prod parity.
 
 **Container-First Deployment** — Every service containerized and orchestrated with Docker Compose, ensuring consistent, reproducible environments from local development to production.
+
+---
+
+## Smoke Checks
+
+Run a CI-aligned smoke suite locally:
+
+```bash
+npm run test:smoke
+```
+
+This executes linting, backend API contract tests, and ML-service tests (local `.venv` if available, Docker Compose fallback otherwise).
 
 **Testing Strategy** — Service-layer unit tests and API validation ensure predictable behavior across releases.
 

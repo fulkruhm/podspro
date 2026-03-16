@@ -5,6 +5,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 
 from anomaly import AnomalyDetector
+from config import AppSettings
 from forecast import DemandForecaster
 from schemas import (
     AnomalyDetectionRequest,
@@ -14,13 +15,22 @@ from schemas import (
 )
 
 
-def register_routes(app: FastAPI) -> None:
+def register_routes(app: FastAPI, settings: AppSettings) -> None:
     @app.get("/health")
     async def health_check():
         """Service health check endpoint"""
         return {
             "status": "healthy",
-            "service": "PODS ML Service",
+            "service": settings.service_name,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    @app.get("/ready")
+    async def readiness_check():
+        """Service readiness endpoint"""
+        return {
+            "status": "ready",
+            "service": settings.service_name,
             "timestamp": datetime.utcnow().isoformat()
         }
 
@@ -114,8 +124,8 @@ def register_routes(app: FastAPI) -> None:
     async def service_info():
         """ML Service capabilities and versions"""
         return {
-            "service": "PODS ML Service",
-            "version": "1.0.0",
+            "service": settings.service_name,
+            "version": settings.service_version,
             "capabilities": [
                 "Anomaly Detection (Isolation Forest)",
                 "Demand Forecasting (Exponential Smoothing)",

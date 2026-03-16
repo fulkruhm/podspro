@@ -1,4 +1,5 @@
 // Frontend service for user management
+import { authFetch } from './authSession';
 
 // Use relative paths to work with nginx proxy
 const API_BASE_URL = '/api';
@@ -23,7 +24,7 @@ function mapUserFromDB(dbUser: any) {
 
 export async function fetchUsers() {
   try {
-    const response = await fetch(`${API_BASE_URL}/users`);
+    const response = await authFetch(`${API_BASE_URL}/users`);
     if (!response.ok) {
       console.error('Failed to fetch users, status:', response.status);
       return [];
@@ -40,7 +41,7 @@ export async function fetchUsers() {
 
 export async function updateUser(userId: string, updates: any) {
   try {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    const response = await authFetch(`${API_BASE_URL}/users/${userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -58,7 +59,7 @@ export async function updateUser(userId: string, updates: any) {
 
 export async function createUser(user: any) {
   try {
-    const response = await fetch(`${API_BASE_URL}/users`, {
+    const response = await authFetch(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user),
@@ -76,7 +77,7 @@ export async function createUser(user: any) {
 
 export async function deleteUser(userId: string) {
   try {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    const response = await authFetch(`${API_BASE_URL}/users/${userId}`, {
       method: 'DELETE',
     });
     if (!response.ok) {

@@ -1,10 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { detectInventoryAnomalies } from '../services/anomalyService.js';
+import { validateRequestBody, anomalyDetectSchema } from '../middleware/validation.js';
+import { requireAuthenticatedUser } from '../middleware/authz.js';
 
 export const anomalyRouter = Router();
 
+anomalyRouter.use(requireAuthenticatedUser);
+
 // Detect anomalies in inventory
-anomalyRouter.post('/detect', async (req: Request, res: Response) => {
+anomalyRouter.post('/detect', validateRequestBody(anomalyDetectSchema), async (req: Request, res: Response) => {
   try {
     const { products } = req.body;
 

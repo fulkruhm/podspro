@@ -10,16 +10,17 @@ import UserManagementView from './components/UserManagementView';
 import ForecastReviewView from './components/ForecastReviewView';
 import Onboarding from './components/Onboarding';
 import FilterBar from './components/FilterBar';
-import LoginView, { INITIAL_USERS } from './components/LoginView';
+import LoginView from './components/LoginView';
 import { fetchRealtimeData } from './services/geminiService';
 import { fetchProducts, fetchRoutes } from './services/dataService';
 import { fetchUsers, updateUser as updateUserInDB } from './services/userService';
+import { setAuthSession, logoutSession } from './services/authSession';
 import { Product, FreightRoute, Filters, User, AuditLog } from './types';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [systemUsers, setSystemUsers] = useState<User[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const saved = localStorage.getItem('pods_audit_logs');
     return saved ? JSON.parse(saved) : [];
@@ -37,6 +38,12 @@ const App: React.FC = () => {
 
   // Load users from database API on component mount
   useEffect(() => {
+    if (!currentUser) {
+      setIsLoadingUsers(false);
+      setSystemUsers([]);
+      return;
+    }
+
     const loadUsers = async () => {
       try {
         setIsLoadingUsers(true);
@@ -45,18 +52,24 @@ const App: React.FC = () => {
         console.log('✓ Loaded users from database:', usersData);
       } catch (error) {
         console.error('Error loading users from database:', error);
-        // Fallback to INITIAL_USERS from LoginView if database fails
-        setSystemUsers(INITIAL_USERS);
+        setSystemUsers([]);
       } finally {
         setIsLoadingUsers(false);
       }
     };
     
     loadUsers();
-  }, []);
+  }, [currentUser]);
 
   // Load products and routes from database API on component mount
   useEffect(() => {
+    if (!currentUser) {
+      setProducts([]);
+      setRoutes([]);
+      setIsLoadingData(false);
+      return;
+    }
+
     const loadData = async () => {
       try {
         setIsLoadingData(true);
@@ -77,7 +90,7 @@ const App: React.FC = () => {
     };
     
     loadData();
-  }, []);
+  }, [currentUser]);
 
   // Persist audit logs whenever they change
   useEffect(() => {
@@ -102,12 +115,14 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: User, token: string, refreshToken: string) => {
+    setAuthSession(token, refreshToken, user);
     setCurrentUser(user);
     // Don't persist login to localStorage - users must login each session
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logoutSession();
     setCurrentUser(null);
     localStorage.removeItem('pods_current_user');
     setActiveTab('dashboard');

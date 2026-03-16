@@ -14,6 +14,14 @@ def test_health_endpoint():
     assert payload['service'] == 'PODS ML Service'
 
 
+def test_readiness_endpoint():
+    response = client.get('/ready')
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['status'] == 'ready'
+    assert payload['service'] == 'PODS ML Service'
+
+
 def test_info_endpoint():
     response = client.get('/api/ml/info')
     assert response.status_code == 200

@@ -1,11 +1,12 @@
 // Frontend anomaly detection API service
 import { Product, InventoryAnomaly } from '../types';
+import { authFetch } from './authSession';
 
 const API_BASE_URL = '/api';
 
 export async function detectInventoryAnomalies(products: Product[]): Promise<InventoryAnomaly[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/anomalies/detect`, {
+    const response = await authFetch(`${API_BASE_URL}/anomalies/detect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ products }),
