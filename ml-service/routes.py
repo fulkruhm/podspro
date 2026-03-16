@@ -132,7 +132,7 @@ def register_routes(app: FastAPI, settings: AppSettings) -> None:
                 "Anomaly Detection (Isolation Forest)",
                 "Demand Forecasting (Exponential Smoothing)",
                 "Batch Analysis",
-                "Ready for: TensorFlow, PyTorch, MLFlow integration"
+                "Ready for: TensorFlow and PyTorch integration"
             ],
             "libraries": {
                 "scikit-learn": "Anomaly detection, preprocessing",

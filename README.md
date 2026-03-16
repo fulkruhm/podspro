@@ -484,8 +484,6 @@ This executes linting, backend API contract tests, and ML-service tests (local `
 - [x] Core inventory and logistics management
 
 **In Progress**
-- [ ] ML model versioning and A/B testing (MLflow)
-- [ ] Advanced time series forecasting (Prophet, ARIMA)
 - [ ] Audit log dashboard and export
 
 **Upcoming**
