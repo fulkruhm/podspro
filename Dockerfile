@@ -35,6 +35,8 @@ CMD ["node", "dist/server.js"]
 FROM nginx:alpine AS frontend-prod
 WORKDIR /app
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy as a template; BACKEND_URL is substituted at startup by envsubst
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# Only substitute ${BACKEND_URL} so nginx variables ($uri, $host, etc.) are preserved
+CMD ["/bin/sh", "-c", "envsubst '${BACKEND_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
