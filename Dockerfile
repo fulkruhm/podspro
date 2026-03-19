@@ -4,7 +4,7 @@
 FROM node:20-alpine AS backend-builder
 WORKDIR /app/backend
 COPY backend/package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 COPY backend . 
 RUN npm run build
 
@@ -17,7 +17,7 @@ RUN npm prune --omit=dev
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 COPY frontend .
 RUN npm run build
 
