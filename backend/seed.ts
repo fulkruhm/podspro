@@ -415,6 +415,36 @@ const STORE_REGION_MAP: Array<{ store: string; region: string }> = [
   { store: 'Metro Wholesale', region: 'Central' },
 ];
 
+const SEED_REFERENCE_DATE = new Date(Date.UTC(2026, 1, 28));
+
+function formatDateOnlyUtc(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function shiftSeedDate(dateString: string, referenceDate = new Date()): string {
+  const parsed = new Date(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return dateString;
+  }
+
+  const referenceUtc = new Date(
+    Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), referenceDate.getUTCDate())
+  );
+  const dayDelta = Math.round(
+    (parsed.getTime() - SEED_REFERENCE_DATE.getTime()) / (24 * 60 * 60 * 1000)
+  );
+
+  referenceUtc.setUTCDate(referenceUtc.getUTCDate() + dayDelta);
+  return formatDateOnlyUtc(referenceUtc);
+}
+
+function withDynamicSeedDates(product: SeedProduct): SeedProduct {
+  return {
+    ...product,
+    lastRestockDate: shiftSeedDate(product.lastRestockDate),
+  };
+}
+
 function buildForecastSeries(baseWeekly: number[], fallbackWeekly: number[], totalDays = 14): number[] {
   const source = baseWeekly.length > 0 ? baseWeekly : fallbackWeekly;
   if (!source.length) return [];
@@ -437,7 +467,7 @@ function buildForecastSeries(baseWeekly: number[], fallbackWeekly: number[], tot
 function buildSeedProducts(): SeedProduct[] {
   if (SEED_PRODUCT_MULTIPLIER <= 1) {
     return MOCK_PRODUCTS.map((product) => ({
-      ...product,
+      ...withDynamicSeedDates(product),
       historicalDemand: [...product.historicalDemand],
       forecastedDemand: buildForecastSeries(product.forecastedDemand || [], product.historicalDemand || [], SEED_FORECAST_DAYS),
     }));
@@ -450,7 +480,7 @@ function buildSeedProducts(): SeedProduct[] {
     for (const baseProduct of MOCK_PRODUCTS) {
       if (replica === 0) {
         expanded.push({
-          ...baseProduct,
+          ...withDynamicSeedDates(baseProduct),
           historicalDemand: [...baseProduct.historicalDemand],
           forecastedDemand: buildForecastSeries(baseProduct.forecastedDemand || [], baseProduct.historicalDemand || [], SEED_FORECAST_DAYS),
         });
@@ -472,7 +502,7 @@ function buildSeedProducts(): SeedProduct[] {
       const derivedReorderPoint = Math.max(derivedDemand + baseProduct.safetyStock, Math.round(baseProduct.reorderPoint * demandScale));
 
       expanded.push({
-        ...baseProduct,
+        ...withDynamicSeedDates(baseProduct),
         id: String(syntheticIdCounter++),
         name: `${baseProduct.name} • Variant ${replica + 1}`,
         currentStock: derivedStock,

@@ -6,8 +6,9 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
+  ReferenceLine,
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -46,11 +47,27 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   currentPosition,
   totalCount,
 }) => {
+  type ConfidenceLevel = 'high' | 'medium' | 'low';
+  type HistoricalFitContext = 'strong' | 'moderate' | 'weak';
+
   interface ForecastTooltipPayloadItem {
     payload?: {
-      demand?: number;
+      actualDemand?: number;
       forecast?: number;
       explainability?: string;
+      confidenceLower?: number;
+      confidenceUpper?: number;
+      confidenceSpread?: number;
+      confidenceSpreadPct?: number;
+      confidenceLevel?: ConfidenceLevel;
+      confidenceLabel?: string;
+      confidenceDescription?: string;
+      confidenceTitle?: string;
+      confidenceMethod?: 'historical-fit' | 'interval-width';
+      historicalErrorPct?: number;
+      historicalWithinBand?: boolean;
+      forecastBasis?: string;
+      period?: 'history' | 'forecast';
     };
   }
 
@@ -75,15 +92,17 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
     setActiveFeatureDriver(null);
   }, [product.id, product.reorderPoint, product.safetyStock]);
 
-  // Use a fixed reference date for consistency in the demo
-  const today = new Date(2026, 1, 28); // Feb 28, 2026
+  const today = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, []);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
   };
 
   const historyCount = 7;
-  const forecastCount = Math.max(7, product.forecastedDemand?.length || 0);
+  const forecastCount = 14;
 
   const finalHistory = useMemo(() => {
     const rawHistory = [...(product.historicalDemand || [])];
@@ -177,6 +196,177 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   const inferredTrend =
     forecastSlope > 0.5 ? 'increasing' : forecastSlope < -0.5 ? 'decreasing' : 'stable';
 
+  const buildConfidenceInterval = (forecastValue: number, horizonScale: number) => {
+    const recentVolatilityPct =
+      confidenceStdDev && baselineAvg && baselineAvg > 0
+        ? confidenceStdDev / Math.max(1, baselineAvg)
+        : 0.12;
+
+    const calibratedVolatilityPct = Math.min(0.28, Math.max(0.08, recentVolatilityPct));
+    const horizonMultiplier = 1 + Math.min(0.5, Math.max(0, (horizonScale - 1) * 0.2));
+
+    const intervalHalfWidth = Math.max(
+      1,
+      Math.round(Math.max(1, forecastValue) * calibratedVolatilityPct * horizonMultiplier)
+    );
+
+    const lowerBound = Math.max(0, Math.round(forecastValue - intervalHalfWidth));
+    const upperBound = Math.max(lowerBound, Math.round(forecastValue + intervalHalfWidth));
+
+    return {
+      lowerBound,
+      upperBound,
+      spread: upperBound - lowerBound,
+    };
+  };
+
+  const getConfidenceMeta = (
+    spread: number | null,
+    forecastValue: number,
+    fitContext: HistoricalFitContext = 'weak'
+  ) => {
+    if (spread === null) {
+      return {
+        level: null,
+        label: null,
+        description: null,
+        className: 'text-slate-700',
+        spreadPct: null,
+      };
+    }
+
+    const spreadPct = Math.round((spread / Math.max(1, forecastValue)) * 100);
+    const highThreshold = fitContext === 'strong' ? 30 : fitContext === 'moderate' ? 25 : 20;
+    const mediumThreshold = fitContext === 'strong' ? 60 : fitContext === 'moderate' ? 50 : 40;
+
+    if (spreadPct <= highThreshold) {
+      return {
+        level: 'high' as ConfidenceLevel,
+        label: 'High confidence',
+        description: `Range width is within ${highThreshold}% of the point forecast.`,
+        className: 'text-emerald-700',
+        spreadPct,
+      };
+    }
+
+    if (spreadPct <= mediumThreshold) {
+      return {
+        level: 'medium' as ConfidenceLevel,
+        label: 'Mixed signal',
+        description: `Range width is between ${highThreshold + 1}% and ${mediumThreshold}% of the point forecast.`,
+        className: 'text-amber-700',
+        spreadPct,
+      };
+    }
+
+    return {
+      level: 'low' as ConfidenceLevel,
+      label: 'Low confidence / risk',
+        description: `Range width is above ${mediumThreshold}% of the point forecast.`,
+      className: 'text-red-700',
+      spreadPct,
+    };
+  };
+
+  const getHistoricalFitMeta = (forecastValue: number, actualValue: number) => {
+    const errorPct = Math.round(
+      (Math.abs(actualValue - forecastValue) / Math.max(1, actualValue)) * 100
+    );
+
+    if (errorPct <= 10) {
+      return {
+        level: 'high' as ConfidenceLevel,
+        label: 'High historical fit',
+        description: 'Expected demand stayed within 10% of actual demand for this day.',
+        className: 'text-emerald-700',
+        errorPct,
+      };
+    }
+
+    if (errorPct <= 20) {
+      return {
+        level: 'medium' as ConfidenceLevel,
+        label: 'Moderate historical fit',
+        description: 'Expected demand stayed within 11-20% of actual demand for this day.',
+        className: 'text-amber-700',
+        errorPct,
+      };
+    }
+
+    return {
+      level: 'low' as ConfidenceLevel,
+      label: 'Low historical fit',
+      description: 'Expected demand missed actual demand by more than 20% for this day.',
+      className: 'text-red-700',
+      errorPct,
+    };
+  };
+
+  const buildPointConfidence = (
+    forecastValue: number,
+    explainability?: string,
+    horizonScale = 1,
+    fitContext: HistoricalFitContext = 'weak'
+  ) => {
+    const confidenceMatch = explainability?.match(/confidence\s+(\d+)\s*-\s*(\d+)/i);
+
+    const interval = confidenceMatch
+      ? {
+          lowerBound: Number(confidenceMatch[1]),
+          upperBound: Number(confidenceMatch[2]),
+          spread: Math.abs(Number(confidenceMatch[2]) - Number(confidenceMatch[1])),
+        }
+      : buildConfidenceInterval(forecastValue, horizonScale);
+
+    const confidenceMeta = getConfidenceMeta(interval.spread, forecastValue, fitContext);
+
+    return {
+      confidenceLower: interval.lowerBound,
+      confidenceUpper: interval.upperBound,
+      confidenceSpread: interval.spread,
+      confidenceSpreadPct: confidenceMeta.spreadPct,
+      confidenceLevel: confidenceMeta.level,
+      confidenceLabel: confidenceMeta.label,
+      confidenceDescription: confidenceMeta.description,
+      confidenceTitle: 'Confidence rating',
+      confidenceMethod: 'interval-width' as const,
+      historicalErrorPct: null,
+      confidenceClassName: confidenceMeta.className,
+    };
+  };
+
+  const buildHistoricalPointConfidence = (forecastValue: number, actualValue: number) => {
+    const fitMeta = getHistoricalFitMeta(forecastValue, actualValue);
+    const intervalHalfWidth = Math.max(
+      1,
+      Math.round(
+        Math.max(
+          Math.abs(actualValue - forecastValue),
+          (confidenceStdDev ?? Math.max(1, forecastValue * 0.08)) * 0.75
+        )
+      )
+    );
+
+    const confidenceLower = Math.max(0, forecastValue - intervalHalfWidth);
+    const confidenceUpper = Math.max(forecastValue, forecastValue + intervalHalfWidth);
+    const historicalWithinBand = actualValue >= confidenceLower && actualValue <= confidenceUpper;
+
+    return {
+      confidenceLower,
+      confidenceUpper,
+      confidenceSpread: intervalHalfWidth * 2,
+      confidenceSpreadPct: null,
+      confidenceLevel: fitMeta.level,
+      confidenceLabel: null,
+      confidenceDescription: fitMeta.description,
+      confidenceTitle: 'Historical comparison',
+      confidenceMethod: 'historical-fit' as const,
+      historicalErrorPct: fitMeta.errorPct,
+      historicalWithinBand,
+      confidenceClassName: fitMeta.className,
+    };
+  };
+
   const buildFallbackExplainability = (dayIndex: number, forecastValue: number) => {
     const variancePercent =
       baselineAvg && baselineAvg > 0
@@ -184,13 +374,7 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
         : null;
 
     const horizonScale = Math.sqrt(dayIndex + 1);
-    const intervalHalfWidth =
-      confidenceStdDev && confidenceStdDev > 0
-        ? Math.max(1, Math.round(confidenceStdDev * 1.28 * horizonScale))
-        : Math.max(1, Math.round(Math.max(1, forecastValue) * 0.12 * horizonScale));
-
-    const lowerBound = Math.max(0, Math.round(forecastValue - intervalHalfWidth));
-    const upperBound = Math.max(lowerBound, Math.round(forecastValue + intervalHalfWidth));
+    const { lowerBound, upperBound } = buildConfidenceInterval(forecastValue, horizonScale);
 
     return `D+${dayIndex + 1}: ${inferredTrend} trend${variancePercent === null ? '' : `, ${variancePercent >= 0 ? '+' : ''}${variancePercent}% vs last-7-day baseline`}, confidence ${lowerBound}-${upperBound} (estimated from demand variance).`;
   };
@@ -240,56 +424,218 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   const historicalData = finalHistory.map((demand, index) => {
     const date = new Date(today);
     date.setDate(today.getDate() - (historyCount - 1 - index));
-    return { date: formatDate(date), demand };
+    const trailingWindow = finalHistory.slice(Math.max(0, index - 3), index);
+    const expectedDemand = Math.max(
+      0,
+      Math.round(
+        trailingWindow.length > 0
+          ? trailingWindow.reduce((sum, value) => sum + value, 0) / trailingWindow.length
+          : baselineAvg ?? product.avgDailyDemand
+      )
+    );
+    const confidence = buildHistoricalPointConfidence(expectedDemand, demand);
+
+    return {
+      date: formatDate(date),
+      actualDemand: demand,
+      forecast: expectedDemand,
+      explainability:
+        'Historical comparison uses a trailing 3-day baseline as the model expectation for each day.',
+      forecastBasis: 'Historical expected demand (trailing 3-day baseline)',
+      period: 'history' as const,
+      hasPromoDriver: false,
+      hasHolidayDriver: false,
+      hasWeatherDriver: false,
+      ...confidence,
+    };
   });
+
+  const historicalFitContext = useMemo<HistoricalFitContext>(() => {
+    if (historicalData.length === 0) {
+      return 'weak';
+    }
+
+    const stats = historicalData.reduce(
+      (acc, point) => {
+        const actual = point.actualDemand ?? 0;
+        const expected = point.forecast ?? 0;
+        acc.errorTotal += Math.abs(actual - expected);
+        const lower = point.confidenceLower ?? actual;
+        const upper = point.confidenceUpper ?? actual;
+        if (actual >= lower && actual <= upper) {
+          acc.within += 1;
+        }
+        return acc;
+      },
+      { errorTotal: 0, within: 0 }
+    );
+
+    const avgError = stats.errorTotal / historicalData.length;
+    const coveragePct = (stats.within / historicalData.length) * 100;
+
+    if (avgError <= 1 && coveragePct >= 85) {
+      return 'strong';
+    }
+
+    if (avgError <= 2 && coveragePct >= 70) {
+      return 'moderate';
+    }
+
+    return 'weak';
+  }, [historicalData]);
 
   const forecastData = finalForecast.map((forecast, index) => {
     const explainability = finalExplainability[index];
     const date = new Date(today);
-    date.setDate(today.getDate() + index);
+    date.setDate(today.getDate() + index + 1);
+    const confidence = buildPointConfidence(
+      forecast,
+      explainability,
+      Math.sqrt(index + 1),
+      historicalFitContext
+    );
+
     return {
       date: formatDate(date),
-      forecast: index === 0 ? historicalData[historicalData.length - 1].demand : forecast,
+      forecast,
       explainability,
+      forecastBasis: 'Persisted forward forecast',
+      period: 'forecast' as const,
       hasPromoDriver: /promo\s+uplift/i.test(explainability),
       hasHolidayDriver: /holiday\s+lift/i.test(explainability),
       hasWeatherDriver: /weather\s+index/i.test(explainability),
+      ...confidence,
     };
   });
 
-  const dataMap = new Map<
-    string,
-    {
-      date: string;
-      demand?: number;
-      forecast?: number;
-      explainability?: string;
-      hasPromoDriver?: boolean;
-      hasHolidayDriver?: boolean;
-      hasWeatherDriver?: boolean;
-    }
-  >();
-  historicalData.forEach((d) => dataMap.set(d.date, { date: d.date, demand: d.demand }));
-  forecastData.forEach((d) => {
-    const existing = dataMap.get(d.date);
-    if (existing) {
-      existing.forecast = d.forecast;
-      existing.explainability = d.explainability;
-      existing.hasPromoDriver = d.hasPromoDriver;
-      existing.hasHolidayDriver = d.hasHolidayDriver;
-      existing.hasWeatherDriver = d.hasWeatherDriver;
-    } else
-      dataMap.set(d.date, {
-        date: d.date,
-        forecast: d.forecast,
-        explainability: d.explainability,
-        hasPromoDriver: d.hasPromoDriver,
-        hasHolidayDriver: d.hasHolidayDriver,
-        hasWeatherDriver: d.hasWeatherDriver,
-      });
-  });
+  const combinedData = [...historicalData, ...forecastData];
 
-  const combinedData = Array.from(dataMap.values());
+  const historicalForecastComparison = useMemo(() => {
+    const comparablePoints = historicalData.filter(
+      (point) => point.actualDemand !== undefined && point.forecast !== undefined
+    );
+
+    if (comparablePoints.length === 0) {
+      return {
+        meanAbsoluteError: 0,
+        meanBiasPct: 0,
+        withinRangeCount: 0,
+        total: 0,
+      };
+    }
+
+    const totalAbsoluteError = comparablePoints.reduce(
+      (sum, point) => sum + Math.abs((point.actualDemand ?? 0) - (point.forecast ?? 0)),
+      0
+    );
+
+    const totalBiasPct = comparablePoints.reduce((sum, point) => {
+      const actual = point.actualDemand ?? 0;
+      const expected = point.forecast ?? 0;
+      return sum + ((expected - actual) / Math.max(1, actual)) * 100;
+    }, 0);
+
+    const withinRangeCount = comparablePoints.reduce((sum, point) => {
+      const actual = point.actualDemand ?? 0;
+      const lower = point.confidenceLower ?? actual;
+      const upper = point.confidenceUpper ?? actual;
+      return sum + (actual >= lower && actual <= upper ? 1 : 0);
+    }, 0);
+
+    return {
+      meanAbsoluteError: Math.round(totalAbsoluteError / comparablePoints.length),
+      meanBiasPct: Math.round(totalBiasPct / comparablePoints.length),
+      withinRangeCount,
+      total: comparablePoints.length,
+    };
+  }, [historicalData]);
+
+  const historicalFitSummary = useMemo(() => {
+    if (historicalForecastComparison.total === 0) {
+      return {
+        label: 'Historical fit unavailable',
+        description: 'Not enough history to evaluate expected demand versus actual demand.',
+        className: 'text-slate-700 bg-slate-50 border-slate-200',
+      };
+    }
+
+    const coveragePct =
+      (historicalForecastComparison.withinRangeCount / historicalForecastComparison.total) * 100;
+
+    if (historicalForecastComparison.meanAbsoluteError <= 1 && coveragePct >= 85) {
+      return {
+        label: 'Historical fit is strong',
+        description: 'Expected demand is tracking actuals closely over the last 7 days.',
+        className: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+      };
+    }
+
+    if (historicalForecastComparison.meanAbsoluteError <= 2 && coveragePct >= 70) {
+      return {
+        label: 'Historical fit is moderate',
+        description: 'Expected demand is directionally aligned, with some day-to-day miss.',
+        className: 'text-amber-700 bg-amber-50 border-amber-200',
+      };
+    }
+
+    return {
+      label: 'Historical fit is weak',
+      description: 'Expected demand is missing actuals often enough to warrant review.',
+      className: 'text-red-700 bg-red-50 border-red-200',
+    };
+  }, [historicalForecastComparison]);
+
+  const futureConfidenceSummary = useMemo(() => {
+    const counts = forecastData.reduce(
+      (acc, point) => {
+        if (point.confidenceLevel === 'high') acc.high += 1;
+        if (point.confidenceLevel === 'medium') acc.medium += 1;
+        if (point.confidenceLevel === 'low') acc.low += 1;
+        if (typeof point.confidenceSpreadPct === 'number') {
+          acc.spreadTotal += point.confidenceSpreadPct;
+          acc.spreadCount += 1;
+        }
+        return acc;
+      },
+      { high: 0, medium: 0, low: 0, spreadTotal: 0, spreadCount: 0 }
+    );
+
+    const averageSpreadPct =
+      counts.spreadCount > 0 ? Math.round(counts.spreadTotal / counts.spreadCount) : null;
+
+    if (counts.low === 0 && counts.medium <= counts.high) {
+      return {
+        label: 'Future outlook is mostly high confidence',
+        description:
+          averageSpreadPct === null
+            ? 'Most forecast days have a relatively tight uncertainty band.'
+            : `Average future range width is about ${averageSpreadPct}% of forecast.`,
+        className: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+      };
+    }
+
+    if (counts.low <= counts.high + counts.medium) {
+      return {
+        label: 'Future outlook is mixed',
+        description:
+          averageSpreadPct === null
+            ? 'Some future days are tight while others carry more uncertainty.'
+            : `Average future range width is about ${averageSpreadPct}% of forecast.`,
+        className: 'text-amber-700 bg-amber-50 border-amber-200',
+      };
+    }
+
+    return {
+      label: 'Future outlook has higher uncertainty',
+      description:
+        averageSpreadPct === null
+          ? 'Several future days have wide uncertainty bands.'
+          : `Average future range width is about ${averageSpreadPct}% of forecast.`,
+      className: 'text-red-700 bg-red-50 border-red-200',
+    };
+  }, [forecastData]);
+
+  const historyBoundaryLabel = historicalData[historicalData.length - 1]?.date;
 
   const chartData = useMemo(() => {
     if (!activeFeatureDriver) {
@@ -443,19 +789,17 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
           ? 'text-emerald-700'
           : 'text-red-700';
 
-    const confidenceRange = confidenceMatch?.[1] || null;
-    const confidenceParts =
-      confidenceRange?.split('-').map((part: string) => Number(part.trim())) || [];
-    const confidenceSpread =
-      confidenceParts.length === 2 ? Math.abs(confidenceParts[1] - confidenceParts[0]) : null;
-    const confidenceClassName =
-      confidenceSpread === null
-        ? 'text-slate-700'
-        : confidenceSpread <= 10
-          ? 'text-emerald-700'
-          : confidenceSpread <= 20
-            ? 'text-amber-700'
-            : 'text-red-700';
+    const confidenceRange =
+      point.confidenceLower !== undefined && point.confidenceUpper !== undefined
+        ? `${point.confidenceLower}-${point.confidenceUpper}`
+        : confidenceMatch?.[1] || null;
+    const confidenceClassName = point.confidenceLabel
+      ? point.confidenceLevel === 'high'
+        ? 'text-emerald-700'
+        : point.confidenceLevel === 'medium'
+          ? 'text-amber-700'
+          : 'text-red-700'
+      : 'text-slate-700';
 
     const promoMatch = explainabilityText.match(/promo\s+(?:uplift|effect)\s+([+-]?\d+)%/i);
     const holidayMatch = explainabilityText.match(/holiday\s+lift\s+([+-]?\d+)%/i);
@@ -509,15 +853,19 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
     return (
       <div className="rounded-xl bg-white border border-slate-200 shadow-lg p-3 max-w-xs">
         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-        {point.demand !== undefined && (
+        {point.actualDemand !== undefined && (
           <p className="text-xs text-slate-700 mt-1">
-            History: <span className="font-bold">{point.demand}</span>
+            Actual demand: <span className="font-bold">{point.actualDemand}</span>
           </p>
         )}
         {point.forecast !== undefined && (
           <p className="text-xs text-slate-700">
-            Forecast: <span className="font-bold">{point.forecast}</span>
+            {point.period === 'history' ? 'Expected demand' : 'Forecast'}:{' '}
+            <span className="font-bold">{point.forecast}</span>
           </p>
+        )}
+        {point.forecastBasis && (
+          <p className="text-[11px] text-slate-500 mt-1">{point.forecastBasis}</p>
         )}
         {point.forecast !== undefined && point.explainability && (
           <div className="mt-2">
@@ -560,11 +908,38 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     <span>
                       Confidence Range:{' '}
                       <span className={`font-black ${confidenceClassName}`}>
-                        {confidenceMatch[1]}
+                        {confidenceRange}
                       </span>
                     </span>
                   </p>
                 )}
+              </div>
+            )}
+            {point.period === 'history' && point.historicalErrorPct !== undefined && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700">
+                <p>
+                  {point.confidenceTitle || 'Historical comparison'}:{' '}
+                  <span className="font-black text-slate-900">{point.historicalErrorPct}% miss vs actual</span>
+                </p>
+                <p className="mt-0.5">
+                  {point.historicalWithinBand
+                    ? 'Actual demand landed inside the expected band for this day.'
+                    : 'Actual demand landed outside the expected band for this day.'}
+                </p>
+              </div>
+            )}
+            {point.period !== 'history' && point.confidenceLabel && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700">
+                <p>
+                  {point.confidenceTitle || 'Confidence rating'}:{' '}
+                  <span className={`font-black ${confidenceClassName}`}>{point.confidenceLabel}</span>
+                  {point.historicalErrorPct !== undefined && point.historicalErrorPct !== null
+                    ? ` (${point.historicalErrorPct}% miss vs actual)`
+                    : point.confidenceSpreadPct !== undefined && point.confidenceSpreadPct !== null
+                    ? ` (${point.confidenceSpreadPct}% width vs point forecast)`
+                    : ''}
+                </p>
+                {point.confidenceDescription && <p className="mt-0.5">{point.confidenceDescription}</p>}
               </div>
             )}
             {featureDrivers.length > 0 && (
@@ -877,12 +1252,14 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
               <div className="flex space-x-4">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">History</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">
+                      Actual Demand
+                    </span>
                 </div>
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-emerald-500 rounded-full mr-2"></div>
                   <span className="text-[10px] font-bold text-slate-500 uppercase">
-                    Forecast (Persisted)
+                      Forecast / Expected Demand
                   </span>
                 </div>
               </div>
@@ -902,17 +1279,7 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 </div>
               )}
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorDemand" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+                <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis
                     dataKey="date"
@@ -930,48 +1297,105 @@ const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     tickLine={false}
                   />
                   <Tooltip content={renderForecastTooltip} />
-                  <Area
+                  {historyBoundaryLabel && (
+                    <ReferenceLine
+                      x={historyBoundaryLabel}
+                      stroke="#cbd5e1"
+                      strokeDasharray="4 4"
+                      label={{
+                        value: 'History | Future',
+                        position: 'top',
+                        fill: '#64748b',
+                        fontSize: 10,
+                      }}
+                    />
+                  )}
+                  <Line
                     type="monotone"
-                    dataKey="demand"
-                    name="Historical Demand"
+                    dataKey="actualDemand"
+                    name="Actual Demand"
                     stroke="#3b82f6"
-                    fillOpacity={1}
-                    fill="url(#colorDemand)"
                     strokeWidth={3}
                     connectNulls
+                    dot={{ r: 3, strokeWidth: 0, fill: '#3b82f6' }}
+                    activeDot={{ r: 5, strokeWidth: 0, fill: '#1d4ed8' }}
                   />
-                  <Area
+                  <Line
                     type="monotone"
                     dataKey="forecast"
                     name="Forecasted Demand"
                     stroke="#10b981"
-                    fillOpacity={1}
-                    fill="url(#colorForecast)"
                     strokeWidth={3}
                     strokeDasharray="5 5"
                     connectNulls
+                    dot={{ r: 3, strokeWidth: 0, fill: '#10b981' }}
+                    activeDot={{ r: 5, strokeWidth: 0, fill: '#047857' }}
                   />
-                </AreaChart>
+                </LineChart>
               </ResponsiveContainer>
             </div>
             <div className="mt-3 px-1">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Hover a forecast point to see model explainability
-              </p>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-700"></span>
-                  Higher Demand Confidence
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-amber-700"></span>
-                  Mixed Signal
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-red-700"></span>
-                  Low Confidence / Risk
-                </span>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Past 7d Avg Miss
+                  </p>
+                  <p className="mt-1 text-sm font-black text-slate-900">
+                    {historicalForecastComparison.meanAbsoluteError} units/day
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Average absolute gap between expected demand and actual demand.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Forecast Bias
+                  </p>
+                  <p className="mt-1 text-sm font-black text-slate-900">
+                    {historicalForecastComparison.meanBiasPct >= 0 ? '+' : ''}
+                    {historicalForecastComparison.meanBiasPct}%
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Positive means forecast ran high; negative means it ran low vs actuals.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    In Confidence Band
+                  </p>
+                  <p className="mt-1 text-sm font-black text-slate-900">
+                    {historicalForecastComparison.withinRangeCount}/{historicalForecastComparison.total} days
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Historical actuals that landed inside the model's expected range.
+                  </p>
+                </div>
               </div>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={`rounded-xl border px-3 py-2 ${historicalFitSummary.className}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-70">
+                    Historical Fit
+                  </p>
+                  <p className="mt-1 text-sm font-black">{historicalFitSummary.label}</p>
+                  <p className="text-[11px] leading-relaxed">{historicalFitSummary.description}</p>
+                </div>
+                <div className={`rounded-xl border px-3 py-2 ${futureConfidenceSummary.className}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-70">
+                    Future Outlook Confidence
+                  </p>
+                  <p className="mt-1 text-sm font-black">{futureConfidenceSummary.label}</p>
+                  <p className="text-[11px] leading-relaxed">{futureConfidenceSummary.description}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+                Example: a confidence range of 90-110 means the model expects demand to land inside
+                that band. The rating is based on how wide that band is relative to the point
+                forecast, not just the raw numbers.
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
+                Historical points use fit quality instead: how closely expected demand matched the
+                actual day, shown in the tooltip as a miss percentage.
+              </p>
               <div className="mt-2">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                   Feature Drivers in Horizon
