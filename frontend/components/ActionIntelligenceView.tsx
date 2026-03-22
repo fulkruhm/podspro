@@ -157,7 +157,7 @@ const ActionIntelligenceView: React.FC<ActionIntelligenceViewProps> = ({
     const to = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : undefined;
 
     void exportAuditLogsCsv({
-      limit: 5000,
+      limit: 1000,
       userId: userFilter === 'all' ? undefined : userFilter,
       region: regionFilter === 'all' ? undefined : regionFilter,
       store: storeFilter === 'all' ? undefined : storeFilter,
