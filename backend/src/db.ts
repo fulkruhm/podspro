@@ -1,8 +1,31 @@
 import pkg from 'pg';
+import dotenv from 'dotenv';
 const { Pool } = pkg;
 
+// Load .env before computing pool config so DATABASE_URL is available locally.
+dotenv.config();
+
+const databaseUrl = process.env.DATABASE_URL;
+const cloudSqlConnectionName = process.env.CLOUD_SQL_CONNECTION_NAME;
+
+const poolConfig = databaseUrl
+  ? {
+      connectionString: databaseUrl,
+    }
+  : cloudSqlConnectionName
+    ? {
+        // Cloud Run + Cloud SQL sockets are exposed under /cloudsql/<instance-connection-name>.
+        host: `/cloudsql/${cloudSqlConnectionName}`,
+        database: process.env.DB_NAME || 'pods_db',
+        user: process.env.DB_USER || 'pods_user',
+        password: process.env.DB_PASSWORD || 'pods_password',
+      }
+    : {
+        connectionString: 'postgresql://pods_user:pods_password@localhost:5432/pods_db',
+      };
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://pods_user:pods_password@localhost:5432/pods_db',
+  ...poolConfig,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -18,6 +41,11 @@ const configuredStaleBatchRunMinutes = Number(process.env.BATCH_RUN_STALE_MINUTE
 const BATCH_RUN_STALE_MINUTES = Number.isFinite(configuredStaleBatchRunMinutes) && configuredStaleBatchRunMinutes > 0
   ? Math.floor(configuredStaleBatchRunMinutes)
   : 45;
+
+const configuredForecastReviewHistoryDays = Number(process.env.FORECAST_REVIEW_HISTORY_DAYS ?? 56);
+const FORECAST_REVIEW_HISTORY_DAYS = Number.isFinite(configuredForecastReviewHistoryDays) && configuredForecastReviewHistoryDays > 0
+  ? Math.floor(configuredForecastReviewHistoryDays)
+  : 56;
 
 // Wait for database to be ready
 async function waitForDatabase(maxRetries = 30, delayMs = 1000) {
@@ -212,7 +240,7 @@ export async function getForecastReviewItems(limit = 50) {
           AVG(h.demand_qty)::DECIMAL(10,2) AS history_avg,
           STDDEV_POP(h.demand_qty)::DECIMAL(10,2) AS history_std
         FROM product_demand_history h
-        WHERE h.demand_date >= CURRENT_DATE - INTERVAL '14 day'
+        WHERE h.demand_date >= CURRENT_DATE - ($2 * INTERVAL '1 day')
         GROUP BY h.product_id, h.store_id
       ),
       latest_run AS (
@@ -330,7 +358,7 @@ export async function getForecastReviewItems(limit = 50) {
       WHERE history.product_id IS NOT NULL AND forecast.product_id IS NOT NULL
       ORDER BY anomaly_score DESC, p.store, p.id
       LIMIT $1
-    `, [limit]);
+    `, [limit, FORECAST_REVIEW_HISTORY_DAYS]);
 
     return result.rows;
   } catch (error) {

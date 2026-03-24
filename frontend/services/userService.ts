@@ -1,7 +1,5 @@
 // Frontend service for user management
-
-// Use relative paths to work with nginx proxy
-const API_BASE_URL = '/api';
+import { API_BASE_URL } from './api';
 
 // Map database snake_case fields to frontend camelCase
 function mapUserFromDB(dbUser: any) {

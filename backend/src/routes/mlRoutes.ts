@@ -14,7 +14,7 @@ import {
   getForecastReviewItems,
   createForecastReviewDecision,
 } from '../db.js';
-import { startStoreProductForecastBatch, STORE_PRODUCT_FORECAST_JOB_TYPE } from '../services/forecastBatchService.js';
+import { executeStoreProductForecastBatch, STORE_PRODUCT_FORECAST_JOB_TYPE } from '../services/forecastBatchService.js';
 import { getNextNightlyForecastRun } from '../services/forecastBatchScheduler.js';
 
 const router = Router();
@@ -193,8 +193,8 @@ router.post('/forecast/batch/store-products', mlLimiter, async (req: Request, re
       return res.status(400).json({ error: 'min_history_points must be >= 3' });
     }
 
-    const triggeredBy = req.header('x-user-name') || 'admin_manual';
-    const { runId, execution } = await startStoreProductForecastBatch({
+      const triggeredBy = req.header('x-user-name') || 'admin_manual';
+      const result = await executeStoreProductForecastBatch({
       historyDays,
       forecastDays,
       minHistoryPoints,
@@ -202,14 +202,20 @@ router.post('/forecast/batch/store-products', mlLimiter, async (req: Request, re
       filters,
     });
 
-    execution.catch((executionError: any) => {
-      console.error('Background store-product forecast batch failed:', executionError?.message || executionError);
-    });
 
-    res.status(202).json({
-      run_id: runId,
-      status: 'running',
-      message: 'Forecast batch accepted and running in background',
+      const finalStatus = result.failed > 0 ? 'partial_success' : 'success';
+
+      res.status(200).json({
+        run_id: result.runId,
+        status: finalStatus,
+        message: finalStatus === 'success'
+          ? 'Forecast batch completed successfully'
+          : 'Forecast batch completed with partial failures',
+        summary: {
+          total_items: result.totalStoreProducts,
+          succeeded_items: result.succeeded,
+          failed_items: result.failed,
+        },
     });
   } catch (error: any) {
     console.error('Batch store-product forecast error:', error.message);

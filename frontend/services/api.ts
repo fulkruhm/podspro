@@ -1,6 +1,11 @@
 // Frontend API service - calls the backend instead of Gemini directly
-// Use relative paths to work with nginx proxy
-const API_BASE_URL = '/api';
+// The base URL may be overridden at build time via VITE_API_BASE_URL; this allows
+// the frontend to communicate with a separately deployed backend service. When
+// the variable is not set we fall back to the relative "/api" path so that the
+// app still works in monolithic/dev environments where nginx proxies the requests.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
+export { API_BASE_URL };
 
 export const startChat = async () => {
   try {

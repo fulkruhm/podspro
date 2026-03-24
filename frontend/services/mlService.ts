@@ -3,7 +3,12 @@
  * Handles communication with Python ML microservice
  */
 
-const ML_API_BASE = '/api/ml';
+import { API_BASE_URL } from './api';
+
+// ML endpoints live under the same API namespace; build the URL dynamically so
+// we reuse whatever base the rest of the app is using (could be absolute or
+// relative).
+const ML_API_BASE = `${API_BASE_URL.replace(/\/$/, '')}/ml`;
 
 // Cache for forecast results to reduce redundant requests
 const forecastCache = new Map<string, { result: ForecastResult; timestamp: number }>();
@@ -368,8 +373,6 @@ export async function getForecastReviewItems(
     headers: {
       'Content-Type': 'application/json',
       'x-user-role': userRole,
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
     },
     cache: 'no-store',
   });

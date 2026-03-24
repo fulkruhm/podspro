@@ -1,5 +1,5 @@
 // Frontend Data Service - Fetches products and routes from backend API
-const API_BASE_URL = '/api';
+import { API_BASE_URL } from './api';
 
 export interface Product {
   id: string;

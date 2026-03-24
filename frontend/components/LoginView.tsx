@@ -37,10 +37,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, addAuditLog }) => {
     setError('');
 
     try {
-      // Call backend login endpoint via relative path (proxied by nginx)
-      console.log('[LoginView] Attempting login...');
+      // Build the endpoint using the API base URL which may have been injected at
+      // build time.  Using a variable lets the same bundle talk to whichever
+      // backend was deployed alongside it.
+      const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+      console.log('[LoginView] Attempting login against', base + '/auth/login');
       
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${base}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

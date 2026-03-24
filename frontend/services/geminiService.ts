@@ -1,6 +1,6 @@
 
 // Frontend Gemini service - calls the backend API instead of Gemini directly
-const API_BASE_URL = '/api';
+import { API_BASE_URL } from './api';
 const REQUEST_TIMEOUT_MS = 120000;
 
 // Chat session management

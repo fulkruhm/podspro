@@ -239,8 +239,11 @@ class DemandForecaster:
             if day_feature["holiday_flag"]:
                 feature_signals.append(f"holiday lift {feature_effects['holiday_uplift'] * 100:+.0f}%")
             weather_delta = (day_feature["weather_index"] - 1.0) * 100
-            if abs(weather_delta) >= 2:
-                feature_signals.append(f"weather index {day_feature['weather_index']:.2f} ({weather_delta:+.0f}%)")
+            # Always emit weather signal so UI explainability panels can reliably
+            # render the weather driver even when the effect is near-neutral.
+            feature_signals.append(
+                f"weather index {day_feature['weather_index']:.2f} ({weather_delta:+.0f}%)"
+            )
 
             feature_date = DemandForecaster._parse_feature_date(day_feature.get("feature_date"))
             if feature_date is not None:

@@ -15,6 +15,8 @@ RUN npm prune --omit=dev
 
 # Build stage for frontend
 FROM node:20-alpine AS frontend-builder
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
@@ -33,8 +35,6 @@ CMD ["node", "dist/server.js"]
 
 # Production stage - Frontend
 FROM nginx:alpine AS frontend-prod
-WORKDIR /app
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+COPY nginx.conf.template /etc/nginx/conf.d/default.conf
 CMD ["nginx", "-g", "daemon off;"]

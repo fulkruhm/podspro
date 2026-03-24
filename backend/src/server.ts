@@ -16,6 +16,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const cloudRunFrontendOriginPattern = /^https:\/\/pods-frontend-[a-z0-9-]+\.([a-z0-9-]+\.)?run\.app$/;
+
 // Security middleware
 app.use(securityHeaders);
 
@@ -30,10 +32,29 @@ if (process.env.FRONTEND_URL) {
 }
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin) || cloudRunFrontendOriginPattern.test(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked origin: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-User-Role',
+    'X-User-Name',
+    'Cache-Control',
+    'Pragma',
+  ],
 }));
 
 // Body parser with size limits
