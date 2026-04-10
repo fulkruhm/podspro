@@ -24,7 +24,7 @@
     "backend"
   ],
   "devDependencies": {
-    "concurrently": "^8.2.0",
+    "concurrently": "^9.2.1",
     "prettier": "^3.5.3"
   }
 }
