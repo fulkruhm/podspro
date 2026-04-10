@@ -124,7 +124,7 @@ sequenceDiagram
   alt Manual trigger by admin
     Admin->>Browser: Start batch forecast
     Browser->>API: POST /api/ml/forecast/batch/store-products
-    API->>API: Validate x-user-role == admin/sysadmin
+    API->>API: Validate bearer token and admin/sysadmin role
     API->>Batch: startStoreProductForecastBatch(...)
     API-->>Browser: 202 Accepted (run_id)
   else Nightly scheduler trigger

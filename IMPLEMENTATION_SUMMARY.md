@@ -1,8 +1,8 @@
 # Regional Analytics Implementation - ARCHIVED
 
-**⚠️ NOTE**: This document describes frontend features that have been **removed from production**. The ML backend service remains fully operational and accessible via API.
+**⚠️ NOTE**: This document describes frontend features that have been removed from production. It is preserved as historical context, not as the current source of truth.
 
-**Current Status**: Frontend UI components (MLDashboard, AnomalyVisualization, ForecastVisualization) are no longer rendered. See [ML_UI_REMOVAL_SUMMARY.md](ML_UI_REMOVAL_SUMMARY.md) for details.
+**Current Status**: The standalone Regional Analytics UI and the referenced ML visualization views are no longer the production architecture. For current behavior, use `README.md`, `ML_SERVICE_API.md`, `HYBRID_ARCHITECTURE_SUMMARY.md`, and `TECHNICAL_SYSTEM_HANDBOOK.md`.
 
 ## Historical Overview
 

@@ -21,6 +21,13 @@ export interface AppConfig {
   mlInfoCacheTtlSeconds: number;
   auditLogRetentionDays: number;
   auditLogPurgeIntervalMinutes: number;
+  digestSchedulerPollSeconds: number;
+  digestSmtpHost?: string;
+  digestSmtpPort: number;
+  digestSmtpSecure: boolean;
+  digestSmtpUser?: string;
+  digestSmtpPass?: string;
+  digestEmailFrom?: string;
   aiResponseTimeoutMs?: number;
   geminiApiKey?: string;
   geminiFastModel: string;
@@ -53,6 +60,8 @@ const DEFAULT_ML_FORECAST_CACHE_TTL_SECONDS = 300;
 const DEFAULT_ML_INFO_CACHE_TTL_SECONDS = 600;
 const DEFAULT_AUDIT_LOG_RETENTION_DAYS = 30;
 const DEFAULT_AUDIT_LOG_PURGE_INTERVAL_MINUTES = 60;
+const DEFAULT_DIGEST_SCHEDULER_POLL_SECONDS = 60;
+const DEFAULT_DIGEST_SMTP_PORT = 587;
 const DEFAULT_GEMINI_FAST_MODEL = 'gemini-3.1-pro-preview';
 const DEFAULT_GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
 const DEFAULT_GEMINI_ANOMALY_MODEL = 'gemini-3-flash-preview';
@@ -228,6 +237,35 @@ function parseOptionalSecret(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function parseOptionalPort(value: string | undefined, fallback: number, envName: string): number {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error(`${envName} must be an integer between 1 and 65535`);
+  }
+
+  return parsed;
+}
+
+function parseOptionalBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (!value) {
+    return fallback;
+  }
+
+  const lowered = value.trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'on'].includes(lowered)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'n', 'off'].includes(lowered)) {
+    return false;
+  }
+
+  throw new Error('DIGEST_SMTP_SECURE must be a boolean value');
+}
+
 export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const errors: string[] = [];
 
@@ -251,6 +289,13 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   let mlInfoCacheTtlSeconds = DEFAULT_ML_INFO_CACHE_TTL_SECONDS;
   let auditLogRetentionDays = DEFAULT_AUDIT_LOG_RETENTION_DAYS;
   let auditLogPurgeIntervalMinutes = DEFAULT_AUDIT_LOG_PURGE_INTERVAL_MINUTES;
+  let digestSchedulerPollSeconds = DEFAULT_DIGEST_SCHEDULER_POLL_SECONDS;
+  let digestSmtpHost: string | undefined;
+  let digestSmtpPort = DEFAULT_DIGEST_SMTP_PORT;
+  let digestSmtpSecure = false;
+  let digestSmtpUser: string | undefined;
+  let digestSmtpPass: string | undefined;
+  let digestEmailFrom: string | undefined;
   let aiResponseTimeoutMs: number | undefined;
   let geminiFastModel = DEFAULT_GEMINI_FAST_MODEL;
   let geminiProModel = DEFAULT_GEMINI_PRO_MODEL;
@@ -431,6 +476,39 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   try {
+    digestSchedulerPollSeconds = parsePositiveInteger(
+      env.DIGEST_SCHEDULER_POLL_SECONDS,
+      DEFAULT_DIGEST_SCHEDULER_POLL_SECONDS,
+      'DIGEST_SCHEDULER_POLL_SECONDS',
+      10,
+      3600
+    );
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
+  }
+
+  try {
+    digestSmtpPort = parseOptionalPort(
+      env.DIGEST_SMTP_PORT,
+      DEFAULT_DIGEST_SMTP_PORT,
+      'DIGEST_SMTP_PORT'
+    );
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
+  }
+
+  try {
+    digestSmtpSecure = parseOptionalBoolean(env.DIGEST_SMTP_SECURE, false);
+  } catch (error: unknown) {
+    errors.push(getErrorMessage(error));
+  }
+
+  digestSmtpHost = parseOptionalSecret(env.DIGEST_SMTP_HOST);
+  digestSmtpUser = parseOptionalSecret(env.DIGEST_SMTP_USER);
+  digestSmtpPass = parseOptionalSecret(env.DIGEST_SMTP_PASS);
+  digestEmailFrom = parseOptionalSecret(env.DIGEST_EMAIL_FROM);
+
+  try {
     aiResponseTimeoutMs = parseOptionalTimeoutMs(env.AI_RESPONSE_TIMEOUT_MS);
   } catch (error: unknown) {
     errors.push(getErrorMessage(error));
@@ -467,6 +545,13 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mlInfoCacheTtlSeconds,
     auditLogRetentionDays,
     auditLogPurgeIntervalMinutes,
+    digestSchedulerPollSeconds,
+    digestSmtpHost,
+    digestSmtpPort,
+    digestSmtpSecure,
+    digestSmtpUser,
+    digestSmtpPass,
+    digestEmailFrom,
     aiResponseTimeoutMs,
     geminiApiKey,
     geminiFastModel,
