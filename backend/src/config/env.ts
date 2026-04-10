@@ -43,7 +43,7 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-const DEFAULT_PORT = 3001;
+const DEFAULT_PORT = process.env.NODE_ENV === 'production' ? 8080 : 3001;
 const DEFAULT_DATABASE_URL = 'postgresql://pods_user:pods_password@localhost:5432/pods_db';
 const DEFAULT_ML_SERVICE_URL = 'http://ml-service:5000';
 const DEFAULT_AUTH_SECRET = 'pods-dev-auth-secret-change-me';
