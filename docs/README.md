@@ -11,6 +11,9 @@ This repository uses a two-lane documentation model.
 - `STAKEHOLDER_BRIEF.md`
 - `TECHNICAL_SYSTEM_HANDBOOK.md`
 - `ML_SERVICE_API.md`
+- `PITCH_DECK.md`
+- `PITCH_DECK_SLIDES.md`
+- `PITCH_DECK_ENTERPRISE.md`
 - `docs/runbooks/operations.md`
 - `docs/runbooks/onboarding.md`
 

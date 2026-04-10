@@ -28,7 +28,7 @@ const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
   const handleSend = async (customMessage?: string) => {
     const textToSend = customMessage || input;
     if (!textToSend.trim() || !chatSessionRef.current || isLoading) return;
-    const modelPrompt = `${textToSend}\n\nReturn your answer in this exact order:\n1) Recommendations\n2) Explanation\nKeep recommendations concise and action-oriented.`;
+    const modelPrompt = `${textToSend}\n\nFormat your answer using exactly these two sections in this exact order and do not repeat either section:\nRecommendations\nExplanation\nKeep recommendations concise and action-oriented.`;
 
     void createAuditLogEvent({
       action: 'ASSISTANT_MESSAGE_SEND',
@@ -106,20 +106,51 @@ const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
     messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const renderModelContent = (content: string) => {
-    const recommendationMatch = content.match(
-      /(?:^|\n)(?:\d+[.)]\s*)?(?:recommendations?|recommended actions?)\s*:?\s*([\s\S]*?)(?=\n(?:\d+[.)]\s*)?(?:explanation|rationale|why)\s*:|$)/i
-    );
-    const explanationMatch = content.match(
-      /(?:^|\n)(?:\d+[.)]\s*)?(?:explanation|rationale|why)\s*:?\s*([\s\S]*)$/i
-    );
-
-    if (!recommendationMatch && !explanationMatch) {
-      return <div className="whitespace-pre-wrap text-xs md:text-sm leading-relaxed">{content}</div>;
+  const extractSectionContent = (content: string, pattern: RegExp) => {
+    const match = pattern.exec(content);
+    if (!match) {
+      return null;
     }
 
-    const recommendations = recommendationMatch?.[1]?.trim();
-    const explanation = explanationMatch?.[1]?.trim();
+    return {
+      start: match.index,
+      contentStart: match.index + match[0].length,
+    };
+  };
+
+  const renderModelContent = (content: string) => {
+    const normalizedContent = content.replace(/\r\n/g, '\n').trim();
+    const recommendationSection = extractSectionContent(
+      normalizedContent,
+      /(?:^|\n)\s*(?:\d+[.)]\s*)?(?:recommendations?|recommended actions?)\s*:?\s*/i
+    );
+    const explanationSection = extractSectionContent(
+      normalizedContent,
+      /(?:^|\n)\s*(?:\d+[.)]\s*)?(?:explanation|rationale|why)\s*:?\s*/i
+    );
+
+    if (!recommendationSection && !explanationSection) {
+      return <div className="whitespace-pre-wrap text-xs md:text-sm leading-relaxed">{normalizedContent}</div>;
+    }
+
+    const recommendations = recommendationSection
+      ? normalizedContent
+          .slice(
+            recommendationSection.contentStart,
+            explanationSection && explanationSection.start > recommendationSection.start
+              ? explanationSection.start
+              : normalizedContent.length
+          )
+          .trim()
+      : '';
+
+    const explanation = explanationSection
+      ? normalizedContent.slice(explanationSection.contentStart).trim()
+      : '';
+
+    if (!recommendations && !explanation) {
+      return <div className="whitespace-pre-wrap text-xs md:text-sm leading-relaxed">{normalizedContent}</div>;
+    }
 
     return (
       <div className="space-y-3 text-xs md:text-sm leading-relaxed">
