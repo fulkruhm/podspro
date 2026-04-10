@@ -28,6 +28,7 @@ const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
   const handleSend = async (customMessage?: string) => {
     const textToSend = customMessage || input;
     if (!textToSend.trim() || !chatSessionRef.current || isLoading) return;
+    const modelPrompt = `${textToSend}\n\nFormat your answer using exactly these two sections in this exact order and do not repeat either section:\nRecommendations\nExplanation\nKeep recommendations concise and action-oriented.`;
 
     void createAuditLogEvent({
       action: 'ASSISTANT_MESSAGE_SEND',
@@ -44,7 +45,7 @@ const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
     setIsLoading(true);
 
     try {
-      await sendMessageStream(chatSessionRef.current, textToSend, (chunk) => {
+      await sendMessageStream(chatSessionRef.current, modelPrompt, (chunk) => {
         setMessages(prev => prev.map(m => (
           m.timestamp === aiMessageTimestamp && m.role === 'model'
             ? { ...m, content: `${m.content}${chunk}` }
@@ -52,7 +53,7 @@ const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
         )));
       });
     } catch (error) {
-      const fallback = await sendMessage(chatSessionRef.current, textToSend);
+      const fallback = await sendMessage(chatSessionRef.current, modelPrompt);
       setMessages(prev => prev.map(m => (
         m.timestamp === aiMessageTimestamp && m.role === 'model'
           ? { ...m, content: fallback }
@@ -105,6 +106,74 @@ const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
     messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const extractSectionContent = (content: string, pattern: RegExp) => {
+    const match = pattern.exec(content);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      start: match.index,
+      contentStart: match.index + match[0].length,
+    };
+  };
+
+  const renderModelContent = (content: string) => {
+    const normalizedContent = content.replace(/\r\n/g, '\n').trim();
+    const recommendationSection = extractSectionContent(
+      normalizedContent,
+      /(?:^|\n)\s*(?:\d+[.)]\s*)?(?:recommendations?|recommended actions?)\s*:?\s*/i
+    );
+    const explanationSection = extractSectionContent(
+      normalizedContent,
+      /(?:^|\n)\s*(?:\d+[.)]\s*)?(?:explanation|rationale|why)\s*:?\s*/i
+    );
+
+    if (!recommendationSection && !explanationSection) {
+      return <div className="whitespace-pre-wrap text-xs md:text-sm leading-relaxed">{normalizedContent}</div>;
+    }
+
+    const recommendations = recommendationSection
+      ? normalizedContent
+          .slice(
+            recommendationSection.contentStart,
+            explanationSection && explanationSection.start > recommendationSection.start
+              ? explanationSection.start
+              : normalizedContent.length
+          )
+          .trim()
+      : '';
+
+    const explanation = explanationSection
+      ? normalizedContent.slice(explanationSection.contentStart).trim()
+      : '';
+
+    if (!recommendations && !explanation) {
+      return <div className="whitespace-pre-wrap text-xs md:text-sm leading-relaxed">{normalizedContent}</div>;
+    }
+
+    return (
+      <div className="space-y-3 text-xs md:text-sm leading-relaxed">
+        {recommendations && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-1">
+              Recommendations
+            </p>
+            <div className="whitespace-pre-wrap text-slate-800">{recommendations}</div>
+          </div>
+        )}
+        {explanation && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1">
+              Explanation
+            </p>
+            <div className="whitespace-pre-wrap text-slate-700">{explanation}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-120px)] bg-white rounded-xl md:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-3 md:p-4 bg-slate-900 text-white flex items-center justify-between">
@@ -136,9 +205,11 @@ const DecisionCopilotView: React.FC<DecisionCopilotViewProps> = ({
                 ? 'bg-blue-600 text-white border-blue-500' 
                 : 'bg-white text-slate-800 border-slate-200'
             }`}>
-              <div className="whitespace-pre-wrap text-xs md:text-sm leading-relaxed prose prose-sm max-w-none prose-slate">
-                {m.content}
-              </div>
+              {m.role === 'model' ? (
+                renderModelContent(m.content)
+              ) : (
+                <div className="whitespace-pre-wrap text-xs md:text-sm leading-relaxed">{m.content}</div>
+              )}
               <div className={`text-[8px] md:text-[10px] mt-2 flex items-center ${m.role === 'user' ? 'text-blue-100' : 'text-slate-400'}`}>
                 <span className="mr-2">{new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 {m.role === 'model' && <span className="bg-blue-50 text-blue-600 px-1 rounded font-bold text-[8px]">PODS ANALYTICS</span>}

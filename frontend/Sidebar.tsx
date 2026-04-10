@@ -142,28 +142,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, onLogo
         </div>
       </button>
 
-      <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
-        {menuItems
-          .filter((item) => item.id !== 'profile')
-          .map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center px-3 sm:px-4 py-3.5 text-[10px] sm:text-[11px] md:text-xs font-bold uppercase tracking-normal sm:tracking-wide md:tracking-widest rounded-xl transition-all ${
-                activeTab === item.id
-                  ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20 translate-x-1'
-                  : 'text-slate-500 hover:bg-slate-800 hover:text-slate-200'
-              }`}
-            >
-              <span className="mr-2 sm:mr-3 text-base sm:text-lg flex-shrink-0">{item.icon}</span>
-              <span className="whitespace-nowrap overflow-hidden text-ellipsis md:overflow-visible md:text-[11px]">
-                {item.label}
-              </span>
-            </button>
-          ))}
-      </nav>
-
-      <div className="p-6 border-t border-slate-800/50 bg-slate-900/80 backdrop-blur-md">
+      <div className="px-4 pb-2">
         <button
           onClick={onLogout}
           className="w-full flex items-center px-4 py-3 text-xs font-black text-slate-400 hover:text-white hover:bg-red-500/10 rounded-xl transition-all uppercase tracking-widest"
@@ -185,6 +164,27 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, onLogo
           Logout
         </button>
       </div>
+
+      <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
+        {menuItems
+          .filter((item) => item.id !== 'profile')
+          .map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center px-3 sm:px-4 py-3.5 text-[10px] sm:text-[11px] md:text-xs font-bold uppercase tracking-normal sm:tracking-wide md:tracking-widest rounded-xl transition-all ${
+                activeTab === item.id
+                  ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20 translate-x-1'
+                  : 'text-slate-500 hover:bg-slate-800 hover:text-slate-200'
+              }`}
+            >
+              <span className="mr-2 sm:mr-3 text-base sm:text-lg flex-shrink-0">{item.icon}</span>
+              <span className="whitespace-nowrap overflow-hidden text-ellipsis md:overflow-visible md:text-[11px]">
+                {item.label}
+              </span>
+            </button>
+          ))}
+      </nav>
     </aside>
   );
 };

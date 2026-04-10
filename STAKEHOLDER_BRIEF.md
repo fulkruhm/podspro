@@ -65,7 +65,6 @@ PODS uses a modular, service-oriented architecture:
 - Backend: Node.js + Express + TypeScript
 - ML Service: Python + FastAPI
 - Data Stores: PostgreSQL + Redis
-- Optional Experiment Layer: MLflow
 
 This enables independent scaling and evolution of API and ML workloads.
 

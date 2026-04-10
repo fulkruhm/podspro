@@ -32,6 +32,62 @@ interface AuditLogApiRow {
   department?: string;
 }
 
+export interface DigestDeliveryFilters {
+  userId?: string;
+  region?: string;
+  store?: string;
+  department?: string;
+  productId?: string;
+  severity?: AuditLog['severity'];
+  searchText?: string;
+}
+
+export interface DigestDeliveryConfig {
+  id: number | null;
+  enabled: boolean;
+  frequency: 'daily' | 'weekly';
+  channel: 'in_app' | 'email';
+  recipient: string;
+  filters: DigestDeliveryFilters;
+  lastSentAt: number | null;
+  nextRunAt: number | null;
+}
+
+export interface DigestDeliveryHistoryItem {
+  id: string;
+  sentAt: number;
+  mode: 'manual' | 'scheduled';
+  channel: 'in_app' | 'email';
+  recipient: string;
+  frequency: 'daily' | 'weekly';
+  summary: string;
+  status: 'sent' | 'failed';
+  error?: string;
+}
+
+interface DigestDeliveryConfigApiRow {
+  id: number | null;
+  enabled: boolean;
+  frequency: 'daily' | 'weekly';
+  channel: 'in_app' | 'email';
+  recipient: string;
+  filters?: DigestDeliveryFilters;
+  last_sent_at?: number | null;
+  next_run_at?: number | null;
+}
+
+interface DigestDeliveryHistoryApiRow {
+  id: string;
+  sent_at: number;
+  mode: 'manual' | 'scheduled';
+  channel: 'in_app' | 'email';
+  recipient: string;
+  frequency: 'daily' | 'weekly';
+  summary: string;
+  status: 'sent' | 'failed';
+  error?: string | null;
+}
+
 function toQueryString(options: FetchAuditLogsOptions = {}) {
   const params = new URLSearchParams();
   if (options.limit !== undefined) params.set('limit', String(options.limit));
@@ -64,6 +120,33 @@ function mapAuditLog(raw: AuditLogApiRow): AuditLog {
     region: raw.region || undefined,
     store: raw.store || undefined,
     department: raw.department || undefined,
+  };
+}
+
+function mapDigestConfig(raw: DigestDeliveryConfigApiRow): DigestDeliveryConfig {
+  return {
+    id: raw.id,
+    enabled: raw.enabled,
+    frequency: raw.frequency,
+    channel: raw.channel,
+    recipient: raw.recipient,
+    filters: raw.filters || {},
+    lastSentAt: raw.last_sent_at ?? null,
+    nextRunAt: raw.next_run_at ?? null,
+  };
+}
+
+function mapDigestHistory(raw: DigestDeliveryHistoryApiRow): DigestDeliveryHistoryItem {
+  return {
+    id: raw.id,
+    sentAt: raw.sent_at,
+    mode: raw.mode,
+    channel: raw.channel,
+    recipient: raw.recipient,
+    frequency: raw.frequency,
+    summary: raw.summary,
+    status: raw.status,
+    error: raw.error || undefined,
   };
 }
 
@@ -117,4 +200,64 @@ export async function exportAuditLogsCsv(options: FetchAuditLogsOptions = {}) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+export async function fetchDigestDeliverySettings(limit = 12): Promise<{
+  config: DigestDeliveryConfig;
+  history: DigestDeliveryHistoryItem[];
+}> {
+  const response = await authFetch(`${appConfig.apiBaseUrl}/audit/digest-delivery?limit=${limit}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch digest settings: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return {
+    config: mapDigestConfig(data.config as DigestDeliveryConfigApiRow),
+    history: ((data.history || []) as DigestDeliveryHistoryApiRow[]).map(mapDigestHistory),
+  };
+}
+
+export async function saveDigestDeliverySettings(input: {
+  enabled: boolean;
+  frequency: 'daily' | 'weekly';
+  channel: 'in_app' | 'email';
+  recipient: string;
+  filters?: DigestDeliveryFilters;
+}): Promise<DigestDeliveryConfig> {
+  const response = await authFetch(`${appConfig.apiBaseUrl}/audit/digest-delivery`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to save digest settings: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return mapDigestConfig(data.config as DigestDeliveryConfigApiRow);
+}
+
+export async function sendDigestNow(options?: { frequency?: 'daily' | 'weekly' }): Promise<{
+  status: 'sent';
+  summary: string;
+}> {
+  const response = await authFetch(`${appConfig.apiBaseUrl}/audit/digest-delivery/send-now`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options || {}),
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    const details = errorPayload?.details || errorPayload?.error;
+    throw new Error(details ? String(details) : `Failed to send digest now: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return {
+    status: 'sent',
+    summary: String(data.summary || ''),
+  };
 }

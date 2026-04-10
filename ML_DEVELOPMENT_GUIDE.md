@@ -1,560 +1,264 @@
-# Python ML Service Development Guide
+# PODS ML Service Development Guide
 
-## Status: Backend Service (API-Only)
+## Purpose
 
-**Note**: Frontend visualization components have been removed. This guide covers development of the Python ML microservice backend only.
+This guide covers day-to-day development of the Python ML microservice and its contract with the Node.js backend.
 
-## Quick Start
+Current stack:
 
-### Local Development (Without Docker)
+- FastAPI
+- scikit-learn
+- numpy
+- pandas
+- pydantic
+- uvicorn
+
+## Project Layout
+
+```text
+ml-service/
+  anomaly.py
+  app_factory.py
+  config.py
+  forecast.py
+  main.py
+  routes.py
+  schemas.py
+  tests/
+```
+
+## Local Development
+
+### Run The ML Service Only
 
 ```bash
 cd ml-service
-
-# Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# Run development server
-uvicorn main:app --reload --host 0.0.0.0 --port 5000
+python main.py
 ```
 
-**Access:** http://localhost:5000
-**Docs:** http://localhost:5000/docs (Swagger UI)
+Default local service URLs:
 
-### Running with Docker
+- `http://localhost:5000/health`
+- `http://localhost:5000/ready`
+- `http://localhost:5000/docs`
+
+### Run With Docker Compose
 
 ```bash
-cd /path/to/podspro
-
-# Build and run entire stack
-docker-compose up --build
-
-# Or just the ML service
-docker-compose up --build ml-service
+docker compose up --build ml-service
 ```
 
----
+When launched via Compose, the service is available on host port `5001`.
 
-## Project Structure
+## Configuration
 
-```
-ml-service/
-├── main.py                    # FastAPI application
-├── requirements.txt           # Python dependencies
-├── Dockerfile                 # Container configuration
-└── README.md                  # This file
-```
+Configuration is centralized in `ml-service/config.py`.
 
----
+Supported settings:
 
-## Available Endpoints (Development Mode)
+| Variable | Default | Purpose |
+|---|---|---|
+| `ML_SERVICE_NAME` | `PODS ML Service` | Service metadata |
+| `ML_SERVICE_VERSION` | `1.0.0` | Reported version |
+| `ML_SERVICE_HOST` | `0.0.0.0` | Uvicorn bind host |
+| `ML_SERVICE_PORT` | `5000` | Uvicorn bind port |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Allowed CORS origins |
 
-### Interactive API Docs
+For the current local frontend, `http://localhost:3000` is the important default.
 
-**Swagger UI:** http://localhost:5000/docs  
-**ReDoc:** http://localhost:5000/redoc
-
-### Core Endpoints
+## Current Endpoint Surface
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | Service health check |
-| GET | `/api/ml/info` | Service capabilities |
-| POST | `/api/ml/anomalies/detect` | Detect anomalies |
-| POST | `/api/ml/forecast` | Forecast demand |
-| POST | `/api/ml/batch-analysis` | Run multiple analyses |
+| GET | `/health` | Liveness |
+| GET | `/ready` | Readiness |
+| GET | `/api/ml/info` | Capability metadata |
+| POST | `/api/ml/anomalies/detect` | Inventory anomaly detection |
+| POST | `/api/ml/forecast` | Demand forecast generation |
+| POST | `/api/ml/batch-analysis` | Combined direct analysis |
 
----
+The Node backend proxies the main inference endpoints and adds:
 
-## Extending the ML Service
+- auth enforcement
+- request validation
+- caching
+- persistence
+- batch queueing and governance
 
-### Adding a New Endpoint
+## How The Service Fits Into PODS
 
-```python
-from fastapi import APIRouter
-from pydantic import BaseModel
+### Python Service Responsibilities
 
-class NewAnalysisRequest(BaseModel):
-    data: List[float]
-    
-@app.post("/api/ml/new-analysis")
-async def new_analysis(request: NewAnalysisRequest):
-    """Your analysis here"""
-    results = compute_something(request.data)
-    return {"results": results}
-```
+- compute anomaly results
+- compute forecast outputs
+- return explainability text and model metadata
+- expose service-level health and readiness
 
-### Adding ML Models
+### Backend Responsibilities
 
-#### 1. Random Forest (Binary Classification)
+- authenticate and authorize callers
+- validate request bodies
+- cache anomaly and non-persistent forecast responses
+- persist forecasts when requested
+- manage batch queueing, retries, and review workflows
 
-```python
-from sklearn.ensemble import RandomForestClassifier
-import numpy as np
+Keep this boundary intact when extending the service.
 
-model = RandomForestClassifier(n_estimators=100)
-X = np.array([[1, 2], [3, 4], [5, 6]])
-y = np.array([0, 1, 0])
-model.fit(X, y)
-```
+## Main Code Paths
 
-#### 2. TensorFlow Deep Learning
+### `routes.py`
 
-First, add to `requirements.txt`:
-```
-tensorflow==2.15.0
-```
+Defines all FastAPI endpoints.
 
-Then use in code:
+Use this file when:
 
-```python
-import tensorflow as tf
-from tensorflow import keras
+- adding or removing endpoints
+- changing request/response behavior
+- updating service metadata exposure
 
-model = keras.Sequential([
-    keras.layers.Dense(64, activation='relu', input_shape=(10,)),
-    keras.layers.Dense(32, activation='relu'),
-    keras.layers.Dense(1, activation='sigmoid')
-])
-model.compile(optimizer='adam', loss='binary_crossentropy')
-```
+### `schemas.py`
 
-#### 3. XGBoost Gradient Boosting
+Defines Pydantic request and response schemas.
 
-Add to `requirements.txt`:
-```
-xgboost==2.0.3
-```
+Use this file when:
 
-```python
-import xgboost as xgb
+- changing contract fields
+- tightening validation
+- introducing new request/response models
 
-dtrain = xgb.DMatrix(X, label=y)
-params = {'max_depth': 5, 'learning_rate': 0.1}
-model = xgb.train(params, dtrain, num_boost_round=100)
-pred = model.predict(dtest)
-```
+### `forecast.py`
 
----
+Contains forecast logic and explainability behavior.
 
-## Best Practices
+Use this file when:
 
-### 1. Data Validation
+- tuning forecast output
+- adding model metadata
+- changing feature influence handling
 
-Always validate input before processing:
+### `anomaly.py`
 
-```python
-from pydantic import BaseModel, validator
+Contains anomaly detection logic.
 
-class InputData(BaseModel):
-    values: List[float]
-    
-    @validator('values')
-    def validate_values(cls, v):
-        if len(v) < 3:
-            raise ValueError('Need at least 3 data points')
-        return v
-```
+Use this file when:
 
-### 2. Error Handling
+- adjusting contamination/sensitivity handling
+- changing anomaly reasoning output
+- adding richer recommendation rules
 
-Return meaningful errors:
+## Contract Expectations
 
-```python
-from fastapi import HTTPException
+### Forecast Endpoint
 
-try:
-    result = compute_analysis(data)
-except ValueError as e:
-    raise HTTPException(status_code=400, detail=str(e))
-except Exception as e:
-    raise HTTPException(status_code=500, detail="Processing failed")
-```
+The backend expects forecast responses to contain:
 
-### 3. Logging
+- `product_id`
+- `store_id`
+- `forecast`
+- `confidence_interval`
+- `trend`
+- `explainability`
+- `model_name`
 
-Add logging for debugging:
+If you add fields such as `model_variant` or `model_version`, update backend handling and docs together.
 
-```python
-import logging
+### Anomaly Endpoint
 
-logger = logging.getLogger(__name__)
+The backend expects anomaly responses to be a list of result objects that can be returned directly to callers.
 
-@app.post("/api/ml/analyze")
-async def analyze(data):
-    logger.info(f"Processing {len(data)} records")
-    try:
-        result = process(data)
-        logger.info("Analysis completed successfully")
-        return result
-    except Exception as e:
-        logger.error(f"Analysis failed: {e}")
-        raise
-```
+## Extension Workflow
 
-### 4. Performance Tips
+### Add A New ML Capability
 
-- **Batch Processing:** Process multiple items at once to reduce overhead
-- **Caching:** Cache model predictions when applicable
-- **Async I/O:** Use async functions for database queries
-- **Model Serialization:** Save trained models to disk, load on startup
+1. Add or extend schema definitions in `schemas.py`
+2. Implement logic in `anomaly.py`, `forecast.py`, or a new module
+3. Register endpoint in `routes.py`
+4. Update backend route proxying if the capability should be application-facing
+5. Update docs and tests
 
-```python
-import joblib
+### Change Existing Forecast Semantics
 
-# Save model
-joblib.dump(model, 'models/my_model.pkl')
+1. Keep the response backward compatible where possible
+2. Update backend persistence logic if field shape changes
+3. Verify frontend/client assumptions
+4. Update `ML_SERVICE_API.md` and system docs
 
-# Load model at startup
-model = joblib.load('models/my_model.pkl')
+### Add External ML Libraries
 
-@app.post("/api/ml/predict")
-async def predict(data):
-    predictions = model.predict(data)
-    return predictions
-```
+Optional future expansion can include libraries such as TensorFlow or PyTorch, but they are not part of the current dependency set.
 
----
+If you add them:
 
-## Frontend Integration
+1. update `requirements.txt`
+2. document the reason and runtime implications
+3. add tests covering the new execution path
+4. revisit Docker image size and startup time
 
-The React frontend consumes the ML service through a TypeScript client (`frontend/services/mlService.ts`):
-
-### Frontend Components
-
-1. **MLDashboard** (`frontend/components/MLDashboard.tsx`)
-   - Main container for ML insights with 3 tabs:
-     - Anomaly Scanner (uses `detectAnomalies`)
-     - Demand Forecaster (uses `forecastDemand`)
-     - Service Status (uses `checkMLHealth`)
-
-2. **AnomalyVisualization** (`frontend/components/AnomalyVisualization.tsx`)
-   - Interactive anomaly scanner with severity-based coloring
-   - Adjustable sensitivity slider
-   - Real-time scanning button
-   - Shows recommendations
-
-3. **ForecastVisualization** (`frontend/components/ForecastVisualization.tsx`)
-   - Product selector and period selector
-   - Interactive Recharts area chart
-   - Confidence interval visualization
-   - Trend analysis (📈 Increasing, 📉 Decreasing, ➡️ Stable)
-
-### TypeScript Client Usage
-
-```typescript
-import { detectAnomalies, forecastDemand, checkMLHealth } from '../services/mlService';
-
-// Example 1: Detect anomalies
-const anomalies = await detectAnomalies(products, 0.05);
-console.log(anomalies);  // Array of AnomalyResult[]
-
-// Example 2: Forecast demand
-const forecast = await forecastDemand({
-  product_id: "PROD_001",
-  store_id: "STORE_001",
-  historical_demand: [20, 22, 19, 25, 23, 21, 24],
-  forecast_days: 7
-});
-console.log(forecast.forecast);  // [24.2, 24.5, 24.8, ...]
-
-// Example 3: Check ML service health
-const health = await checkMLHealth();
-console.log(health.status);  // "healthy" or error
-```
-
-### Flow: Frontend → Backend → ML Service
-
-```
-User clicks "Scan Anomalies" in React
-        ↓
-AnomalyVisualization.tsx calls detectAnomalies()
-        ↓
-mlService.ts sends: POST /api/ml/anomalies/detect
-        ↓
-Backend (mlRoutes.ts) receives request
-        ↓
-Backend forwards to Python ML service
-        ↓
-Python service runs Isolation Forest
-        ↓
-Returns: { is_anomaly, anomaly_score, reason, recommended_action }
-        ↓
-Frontend renders severity-colored alerts
-```
-
-### Example: Using ML in a Component
-
-```typescript
-import { useEffect, useState } from 'react';
-import { detectAnomalies } from '../services/mlService';
-import { AnomalyResult } from '../types';
-
-export function MyMLComponent({ products }) {
-  const [anomalies, setAnomalies] = useState<AnomalyResult[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const handleScan = async (sensitivity: number) => {
-    setLoading(true);
-    try {
-      const results = await detectAnomalies(products, sensitivity);
-      setAnomalies(results);
-    } catch (error) {
-      console.error('Scan failed:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <button onClick={() => handleScan(0.05)} disabled={loading}>
-        {loading ? 'Scanning...' : 'Scan for Anomalies'}
-      </button>
-      
-      {anomalies.map(anomaly => (
-        <div key={anomaly.product_id}>
-          <p>Product: {anomaly.product_id}</p>
-          <p>Anomaly Score: {(anomaly.anomaly_score * 100).toFixed(1)}%</p>
-          <p>Reason: {anomaly.reason}</p>
-          {anomaly.is_anomaly && (
-            <p style={{ color: 'red' }}>⚠️ {anomaly.recommended_action}</p>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-```
-
-### Frontend Roles & Access
-
-ML Insights dashboard is visible to:
-- ✅ System Admin (sysadmin)
-- ✅ Logistics User (logistics_user)
-- ✅ Admin (admin)
-- ❌ Store User (store_user)
-
----
+MLflow is not part of the current shipped runtime.
 
 ## Testing
 
-### Unit Tests
+### Service Tests
 
-Create `test_main.py`:
+The repo includes ML service tests under `ml-service/tests/`.
 
-```python
-from fastapi.testclient import TestClient
-from main import app
-
-client = TestClient(app)
-
-def test_health():
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "healthy"
-
-def test_anomaly_detection():
-    response = client.post("/api/ml/anomalies/detect", json={
-        "datapoints": [
-            {
-                "timestamp": "2026-03-01T10:00:00Z",
-                "product_id": "P1",
-                "store_id": "S1",
-                "current_stock": 100,
-                "avg_daily_demand": 20
-            }
-        ],
-        "sensitivity": 0.05
-    })
-    assert response.status_code == 200
-    assert "is_anomaly" in response.json()[0]
-```
-
-Run tests:
+Run them from repo root:
 
 ```bash
-pip install pytest
-pytest test_main.py -v
+docker compose run --rm ml-service pytest -q
 ```
 
----
+If using the workspace Python environment directly, use the configured interpreter and run pytest from `ml-service/`.
 
-## Monitoring & Logging
-
-### View Logs
+### Manual Smoke Checks
 
 ```bash
-# Docker
-docker-compose logs ml-service
-docker-compose logs ml-service -f  # Follow
-
-# Local
-uvicorn main:app --log-level debug
-```
-
-### Health Monitoring
-
-```bash
-# Check service health
 curl http://localhost:5000/health
-
-# From Node.js backend
-curl http://localhost:3001/api/ml/health
+curl http://localhost:5000/ready
+curl http://localhost:5000/api/ml/info
 ```
 
----
+## Development Guidelines
 
-## Database Connection
+### Keep The Service Stateless
 
-The ML service has access to PostgreSQL:
+- avoid local mutable singleton state unless required for model loading
+- prefer deterministic request-in/request-out behavior
+- treat persistence as a backend concern unless there is a clear architectural reason otherwise
 
-```python
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import os
+### Keep Contracts Explicit
 
-DATABASE_URL = os.getenv('DATABASE_URL')
+- validate all incoming payloads through Pydantic models
+- avoid loosely typed JSON blobs
+- preserve stable field names once consumed by backend/frontend code
 
-def get_db():
-    conn = psycopg2.connect(DATABASE_URL)
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    return conn, cursor
+### Fail Clearly
 
-# Usage
-conn, cursor = get_db()
-cursor.execute("SELECT * FROM products")
-products = cursor.fetchall()
-conn.close()
-```
+- raise explicit `HTTPException` values for expected failures
+- keep internal stack traces out of external responses where practical
+- log enough context to correlate failures with backend request IDs
 
-Or use SQLAlchemy:
+### Watch For Performance Regressions
 
-```python
-from sqlalchemy import create_engine
+- large forecast batches should stay in backend-managed queue paths
+- synchronous direct endpoints should remain suitable for request/response use
+- expensive new model initialization should be measured and, if needed, moved to startup
 
-engine = create_engine(os.getenv('DATABASE_URL'))
+## Common Change Checklist
 
-with engine.connect() as conn:
-    result = conn.execute("SELECT * FROM products")
-    products = result.fetchall()
-```
+- update schemas
+- update service logic
+- update backend integration if contracts changed
+- update docs
+- run tests
+- validate local health and readiness
 
----
+## Related Docs
 
-## Deployment Checklist
-
-- [ ] All endpoints documented in code
-- [ ] Error handling for edge cases
-- [ ] Performance tested with expected data volume
-- [ ] Input validation on all endpoints
-- [ ] Logging configured
-- [ ] Health check returning correct status
-- [ ] Requirements.txt updated with all dependencies
-- [ ] Dockerfile builds successfully
-- [ ] Docker Compose integrates service correctly
-- [ ] API accessible from Node.js backend
-
----
-
-## Future Enhancements
-
-### Planned
-
-1. **MLflow Integration** - Model versioning and experiment tracking
-   ```bash
-   pip install mlflow
-   mlflow ui  # View experiments at http://localhost:5000
-   ```
-
-2. **Model Serving** - TensorFlow Serving for production models
-   ```bash
-   pip install tensorflow-serving-api
-   ```
-
-3. **Feature Store** - Feast for feature management
-   ```bash
-   pip install feast
-   feast init my_feature_store
-   ```
-
-4. **Distributed Training** - Ray for parallel ML
-   ```bash
-   pip install ray
-   ```
-
-### Example: MLflow Integration
-
-```python
-import mlflow
-from sklearn.ensemble import RandomForestClassifier
-
-mlflow.set_experiment("anomaly_detection")
-
-with mlflow.start_run():
-    model = RandomForestClassifier(n_estimators=100)
-    model.fit(X_train, y_train)
-    
-    score = model.score(X_test, y_test)
-    mlflow.log_metric("accuracy", score)
-    mlflow.log_param("n_estimators", 100)
-    mlflow.sklearn.log_model(model, "model")
-```
-
----
-
-## Troubleshooting
-
-### Issue: "Module not found"
-
-**Solution:** Ensure virtual environment is activated and requirements installed:
-
-```bash
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Issue: "Connection refused" (Docker)
-
-**Solution:** Ensure services are running:
-
-```bash
-docker-compose ps
-docker-compose logs ml-service
-```
-
-### Issue: Slow predictions
-
-**Solution:** Profile and cache results:
-
-```python
-import time
-
-@app.post("/api/ml/predict")
-async def predict(data):
-    start = time.time()
-    result = model.predict(data)
-    elapsed = time.time() - start
-    logger.info(f"Prediction took {elapsed:.2f}s for {len(data)} items")
-    return result
-```
-
----
-
-## Resources
-
-- **FastAPI Docs:** https://fastapi.tiangolo.com
-- **scikit-learn:** https://scikit-learn.org
-- **Pandas:** https://pandas.pydata.org
-- **NumPy:** https://numpy.org
-- **TensorFlow:** https://www.tensorflow.org
-- **Docker:** https://docs.docker.com
-
----
-
-**Last Updated:** March 1, 2026  
-**Python Version:** 3.11+
+- `ML_SERVICE_API.md`
+- `HYBRID_ARCHITECTURE_SUMMARY.md`
+- `TECHNICAL_SYSTEM_HANDBOOK.md`
+`README.md`

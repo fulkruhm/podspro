@@ -27,6 +27,23 @@ interface CommandCenterViewProps {
   userRole: Role;
   currentUserName: string;
   filters: Filters;
+  onNavigateTab: (tab: string) => void;
+}
+
+interface StatCard {
+  label: string;
+  value: string;
+  change: string;
+  icon: string;
+  color?: string;
+  domain: 'inventory' | 'logistics' | 'system' | 'finance';
+  definition: string;
+  formula: string;
+  owner: string;
+  freshness: string;
+  confidence: 'High' | 'Medium' | 'Low';
+  previousValue: string;
+  changeDrivers: string[];
 }
 
 const CommandCenterView: React.FC<CommandCenterViewProps> = ({
@@ -40,6 +57,7 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
   userRole,
   currentUserName,
   filters,
+  onNavigateTab,
 }) => {
   const getErrorMessage = (error: unknown, fallback: string): string => {
     if (error instanceof Error && error.message) {
@@ -54,6 +72,7 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
   const [batchStatusLoading, setBatchStatusLoading] = React.useState(false);
   const [batchRunLoading, setBatchRunLoading] = React.useState(false);
   const [batchError, setBatchError] = React.useState<string | null>(null);
+  const [selectedMetricLabel, setSelectedMetricLabel] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
@@ -198,6 +217,60 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
     low: '#f59e0b',
   };
   const inventoryValue = products.reduce((acc, p) => acc + p.currentStock * p.price, 0);
+  const inventoryCoveragePct =
+    products.length > 0
+      ? Math.round(
+          (products.filter(
+            (p) =>
+              typeof p.currentStock === 'number' &&
+              typeof p.avgDailyDemand === 'number' &&
+              typeof p.reorderPoint === 'number'
+          ).length /
+            products.length) *
+            100
+        )
+      : 100;
+  const logisticsCoveragePct =
+    routes.length > 0
+      ? Math.round(
+          (routes.filter(
+            (r) =>
+              typeof r.currentRate === 'number' &&
+              typeof r.riskLevel === 'string' &&
+              typeof r.capacity === 'string'
+          ).length /
+            routes.length) *
+            100
+        )
+      : 100;
+  const trustStripItems = [
+    {
+      label: 'Data Freshness',
+      value: getLastSyncedLabel(),
+      tone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    },
+    {
+      label: 'Inventory Quality',
+      value: `${inventoryCoveragePct}% coverage`,
+      tone:
+        inventoryCoveragePct >= 90
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          : 'bg-amber-50 text-amber-700 border-amber-200',
+    },
+    {
+      label: 'Logistics Quality',
+      value: `${logisticsCoveragePct}% coverage`,
+      tone:
+        logisticsCoveragePct >= 90
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          : 'bg-amber-50 text-amber-700 border-amber-200',
+    },
+    {
+      label: 'Model Confidence',
+      value: 'Operational (medium)',
+      tone: 'bg-blue-50 text-blue-700 border-blue-200',
+    },
+  ];
 
   const inventoryAlerts =
     userRole === 'admin' || userRole === 'sysadmin' || userRole === 'store_user'
@@ -300,35 +373,184 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
     },
   ];
 
-  const getRoleStatCards = () => {
+  const getStatMetadata = (label: string): Omit<
+    StatCard,
+    'label' | 'value' | 'change' | 'icon' | 'color' | 'domain'
+  > => {
+    switch (label) {
+      case 'Avg Service Level':
+        return {
+          definition: 'Percentage of fulfilled demand without service disruption.',
+          formula: '(Served demand / Total demand) * 100',
+          owner: 'Inventory Operations',
+          freshness: 'Near real-time (4m lag)',
+          confidence: 'High',
+          previousValue: '98.2%',
+          changeDrivers: ['Critical SKUs recovered in 2 stores', 'Fill rate uptick in top sellers'],
+        };
+      case 'Total Assets':
+        return {
+          definition: 'Approximate value of current inventory assets in scope.',
+          formula: 'Sum(current stock * unit price)',
+          owner: 'Inventory Finance',
+          freshness: '15m lag',
+          confidence: 'Medium',
+          previousValue: '$13.9k',
+          changeDrivers: ['Sell-through reduced on-hand value', 'Markdown adjustments on excess items'],
+        };
+      case 'Network Risk Index':
+        return {
+          definition: 'Composite risk based on lane risk, disruption signals, and capacity.',
+          formula: 'Weighted index(lane risk, delays, capacity tightness)',
+          owner: 'Logistics Control Tower',
+          freshness: '10m lag',
+          confidence: 'Medium',
+          previousValue: 'Moderate',
+          changeDrivers: ['Weather advisory on key lane', 'Carrier delay probability increased'],
+        };
+      case 'Carrier Capacity':
+        return {
+          definition: 'Available carrier capacity against planned requirement.',
+          formula: 'Available slots / Required slots',
+          owner: 'Logistics Planning',
+          freshness: '10m lag',
+          confidence: 'Medium',
+          previousValue: '77%',
+          changeDrivers: ['Two carriers reduced weekly slots', 'Spot market tightened in region'],
+        };
+      case 'System Uptime':
+        return {
+          definition: 'Platform availability over rolling 24 hours.',
+          formula: '1 - (Downtime / Total time)',
+          owner: 'Platform SRE',
+          freshness: '1m lag',
+          confidence: 'High',
+          previousValue: '99.97%',
+          changeDrivers: ['No critical incidents in period', 'Background autoscaling stabilized'],
+        };
+      case 'Security Events':
+        return {
+          definition: 'Count of unresolved security events in monitoring queue.',
+          formula: 'Open alerts by severity policy',
+          owner: 'Security Operations',
+          freshness: '1m lag',
+          confidence: 'High',
+          previousValue: '5 Open',
+          changeDrivers: ['Two medium alerts resolved', 'No new critical findings'],
+        };
+      case 'API Throughput':
+        return {
+          definition: 'Requests processed per minute across public APIs.',
+          formula: 'Total requests / minute',
+          owner: 'Platform Engineering',
+          freshness: '1m lag',
+          confidence: 'High',
+          previousValue: '1.15k/min',
+          changeDrivers: ['Higher dashboard polling activity', 'Batch status checks increased'],
+        };
+      case 'On-Time Delivery':
+        return {
+          definition: 'Shipments delivered within planned SLA window.',
+          formula: '(On-time deliveries / Total deliveries) * 100',
+          owner: 'Transportation Operations',
+          freshness: '30m lag',
+          confidence: 'Medium',
+          previousValue: '93.1%',
+          changeDrivers: ['Improved dock turnaround', 'Reduced late arrivals on primary lane'],
+        };
+      case 'Avg Freight Rate':
+        return {
+          definition: 'Average effective freight rate across active lanes.',
+          formula: 'Total freight spend / Total miles',
+          owner: 'Logistics Procurement',
+          freshness: '30m lag',
+          confidence: 'Medium',
+          previousValue: '$2.82/mi',
+          changeDrivers: ['Fuel surcharge increase', 'Higher share of spot bookings'],
+        };
+      case 'Stockout Risk':
+        return {
+          definition: 'Count of SKUs currently flagged as high stockout risk.',
+          formula: 'Critical SKU count from status model',
+          owner: 'Store Replenishment',
+          freshness: 'Near real-time (4m lag)',
+          confidence: 'High',
+          previousValue: '0 SKU',
+          changeDrivers: ['Forecast volatility in fast movers', 'Reorder delays at store level'],
+        };
+      case 'Optimal Items':
+        return {
+          definition: 'Count of SKUs operating within target stock policy band.',
+          formula: 'SKUs with status=optimal',
+          owner: 'Store Replenishment',
+          freshness: 'Near real-time (4m lag)',
+          confidence: 'High',
+          previousValue: `${Math.max(0, (statusCounts.optimal || 0) - 2)}`,
+          changeDrivers: ['Safety stock tuning improved balance', 'Replenishment timing stabilized'],
+        };
+      default:
+        return {
+          definition: 'Operational metric tracked by the command center.',
+          formula: 'See metric specification',
+          owner: 'Operations',
+          freshness: 'Near real-time',
+          confidence: 'Medium',
+          previousValue: 'n/a',
+          changeDrivers: ['Routine data refresh'],
+        };
+    }
+  };
+
+  const getRoleStatCards = (): Array<Omit<StatCard, keyof ReturnType<typeof getStatMetadata>>> => {
     if (userRole === 'sysadmin') {
       return [
-        { label: 'System Uptime', value: '99.98%', change: '+0.01%', icon: '🖥️' },
+        {
+          label: 'System Uptime',
+          value: '99.98%',
+          change: '+0.01%',
+          icon: '🖥️',
+          domain: 'system',
+        },
         {
           label: 'Security Events',
           value: '3 Open',
           change: '-2',
           icon: '🛡️',
           color: 'text-amber-600',
+          domain: 'system',
         },
-        { label: 'API Throughput', value: '1.2k/min', change: '+4.3%', icon: '📡' },
+        {
+          label: 'API Throughput',
+          value: '1.2k/min',
+          change: '+4.3%',
+          icon: '📡',
+          domain: 'system',
+        },
         {
           label: 'Total Assets',
           value: `$${(inventoryValue / 1000).toFixed(1)}k`,
           change: '-1.4%',
           icon: '💰',
+          domain: 'finance',
         },
       ];
     }
 
     if (userRole === 'admin') {
       return [
-        { label: 'Avg Service Level', value: '98.4%', change: '+0.2%', icon: '📈' },
+        {
+          label: 'Avg Service Level',
+          value: '98.4%',
+          change: '+0.2%',
+          icon: '📈',
+          domain: 'inventory',
+        },
         {
           label: 'Total Assets',
           value: `$${(inventoryValue / 1000).toFixed(1)}k`,
           change: '-1.4%',
           icon: '💰',
+          domain: 'inventory',
         },
         {
           label: 'Network Risk Index',
@@ -336,8 +558,15 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
           change: 'High',
           icon: '🛡️',
           color: 'text-amber-600',
+          domain: 'logistics',
         },
-        { label: 'Carrier Capacity', value: '72%', change: '-5%', icon: '🚛' },
+        {
+          label: 'Carrier Capacity',
+          value: '72%',
+          change: '-5%',
+          icon: '🚛',
+          domain: 'logistics',
+        },
       ];
     }
 
@@ -349,20 +578,46 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
           change: 'High',
           icon: '🛡️',
           color: 'text-amber-600',
+          domain: 'logistics',
         },
-        { label: 'Carrier Capacity', value: '72%', change: '-5%', icon: '🚛' },
-        { label: 'On-Time Delivery', value: '94.2%', change: '+1.1%', icon: '⏱️' },
-        { label: 'Avg Freight Rate', value: '$2.84/mi', change: '+0.6%', icon: '🧭' },
+        {
+          label: 'Carrier Capacity',
+          value: '72%',
+          change: '-5%',
+          icon: '🚛',
+          domain: 'logistics',
+        },
+        {
+          label: 'On-Time Delivery',
+          value: '94.2%',
+          change: '+1.1%',
+          icon: '⏱️',
+          domain: 'logistics',
+        },
+        {
+          label: 'Avg Freight Rate',
+          value: '$2.84/mi',
+          change: '+0.6%',
+          icon: '🧭',
+          domain: 'logistics',
+        },
       ];
     }
 
     return [
-      { label: 'Avg Service Level', value: '98.4%', change: '+0.2%', icon: '📈' },
+      {
+        label: 'Avg Service Level',
+        value: '98.4%',
+        change: '+0.2%',
+        icon: '📈',
+        domain: 'inventory',
+      },
       {
         label: 'Total Assets',
         value: `$${(inventoryValue / 1000).toFixed(1)}k`,
         change: '-1.4%',
         icon: '💰',
+        domain: 'inventory',
       },
       {
         label: 'Stockout Risk',
@@ -370,12 +625,47 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
         change: `${statusCounts.critical ? '+' : ''}${statusCounts.critical || 0}`,
         icon: '⚠️',
         color: 'text-red-600',
+        domain: 'inventory',
       },
-      { label: 'Optimal Items', value: `${statusCounts.optimal || 0}`, change: '+2', icon: '✅' },
+      {
+        label: 'Optimal Items',
+        value: `${statusCounts.optimal || 0}`,
+        change: '+2',
+        icon: '✅',
+        domain: 'inventory',
+      },
     ];
   };
 
-  const statCards = getRoleStatCards();
+  const statCards = getRoleStatCards().map((card) => ({
+    ...card,
+    ...getStatMetadata(card.label),
+  }));
+
+  const selectedMetric =
+    statCards.find((metric) => metric.label === selectedMetricLabel) ?? statCards[0] ?? null;
+
+  const getTabForDomain = (domain: StatCard['domain']) => {
+    if (domain === 'inventory' || domain === 'finance') return 'inventory';
+    if (domain === 'logistics') return 'logistics';
+    if (domain === 'system') return 'useractions';
+    return 'dashboard';
+  };
+
+  const shouldShowHoverWhyChanged = (metricLabel: string) =>
+    ![
+      'Avg Service Level',
+      'Total Assets',
+      'Total Inventory',
+      'Network Risk Index',
+      'Carrier Capacity',
+    ].includes(metricLabel);
+
+  React.useEffect(() => {
+    if (!selectedMetricLabel && statCards.length > 0) {
+      setSelectedMetricLabel(statCards[0].label);
+    }
+  }, [selectedMetricLabel, statCards]);
 
   return (
     <div className="space-y-6">
@@ -391,28 +681,39 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
             </p>
           </div>
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className={`flex items-center space-x-2 bg-slate-900 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl active:scale-95 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className={`flex items-center space-x-2 bg-slate-900 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl active:scale-95 ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={3}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          <span>{isRefreshing ? 'Refreshing...' : 'Sync Live Engine'}</span>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span>{isRefreshing ? 'Refreshing...' : 'Sync Live Engine'}</span>
+          </button>
+        </div>
       </header>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        {trustStripItems.map((item) => (
+          <div key={item.label} className={`rounded-xl border px-3 py-2 ${item.tone}`}>
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{item.label}</p>
+            <p className="text-xs font-bold mt-1">{item.value}</p>
+          </div>
+        ))}
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         {isLoadingData
@@ -430,23 +731,44 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
               </div>
             ))
           : statCards.map((stat, i) => (
-              <div
+              <button
                 key={i}
-                className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm transition hover:shadow-xl group relative overflow-hidden"
+                type="button"
+                onClick={() => setSelectedMetricLabel(stat.label)}
+                className={`bg-white p-5 md:p-6 rounded-[1.5rem] border shadow-sm transition hover:shadow-xl group relative overflow-hidden text-left ${
+                  selectedMetric?.label === stat.label
+                    ? 'border-blue-300 ring-2 ring-blue-100'
+                    : 'border-slate-200'
+                }`}
               >
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-2xl group-hover:scale-125 transition-transform duration-300">
                     {stat.icon}
                   </span>
-                  <span
-                    className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                      stat.change.startsWith('+')
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {stat.change}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                        stat.change.startsWith('+')
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {stat.change}
+                    </span>
+                    <span
+                      className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        stat.domain === 'inventory'
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                          : stat.domain === 'logistics'
+                            ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                            : stat.domain === 'finance'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      {stat.domain}
+                    </span>
+                  </div>
                 </div>
                 <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
                   {stat.label}
@@ -456,9 +778,96 @@ const CommandCenterView: React.FC<CommandCenterViewProps> = ({
                 >
                   {stat.value}
                 </div>
-              </div>
+                <div className="mt-2 text-[10px] text-slate-500 font-bold uppercase tracking-wide">
+                  Click for drilldown
+                </div>
+                {shouldShowHoverWhyChanged(stat.label) && (
+                  <div className="absolute left-3 right-3 top-16 hidden group-hover:block z-20">
+                    <div className="rounded-xl border border-slate-200 bg-white/95 backdrop-blur px-3 py-2 shadow-xl">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Why Changed
+                      </p>
+                      <p className="text-[11px] text-slate-700 mt-1">
+                        Prev: <span className="font-bold text-slate-900">{stat.previousValue}</span>{' ->'}
+                        Now: <span className="font-bold text-slate-900"> {stat.value}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-700">
+                        Confidence: <span className="font-bold">{stat.confidence}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-600 mt-1">
+                        {stat.changeDrivers[0]}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </button>
             ))}
       </div>
+
+      {selectedMetric && (
+        <div className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Metric Drilldown
+              </p>
+              <h3 className="text-lg font-black text-slate-900 mt-1">{selectedMetric.label}</h3>
+            </div>
+            <span className="text-[10px] font-black px-2 py-1 rounded-full bg-slate-100 text-slate-700 uppercase tracking-wider">
+              {selectedMetric.domain}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Current</p>
+              <p className="text-sm font-black text-slate-900 mt-1">{selectedMetric.value}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Previous</p>
+              <p className="text-sm font-black text-slate-900 mt-1">{selectedMetric.previousValue}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Confidence</p>
+              <p className="text-sm font-black text-slate-900 mt-1">{selectedMetric.confidence}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Definition</p>
+              <p className="text-xs text-slate-700 mt-1">{selectedMetric.definition}</p>
+              <p className="text-[11px] text-slate-500 mt-2">Formula: {selectedMetric.formula}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Why Changed</p>
+              <p className="text-[11px] text-slate-500 mt-1">Owner: {selectedMetric.owner}</p>
+              <p className="text-[11px] text-slate-500">Freshness: {selectedMetric.freshness}</p>
+              <div className="mt-2 space-y-1">
+                {selectedMetric.changeDrivers.map((driver) => (
+                  <p key={driver} className="text-xs text-slate-700">- {driver}</p>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              onClick={() => onNavigateTab(getTabForDomain(selectedMetric.domain))}
+              className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700"
+            >
+              Open Related View
+            </button>
+            <button
+              onClick={() =>
+                triggerQuery(
+                  `Explain why ${selectedMetric.label} changed from ${selectedMetric.previousValue} to ${selectedMetric.value} and give 3 concrete actions for ${selectedMetric.domain} operations.`
+                )
+              }
+              className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-50"
+            >
+              Ask AI
+            </button>
+          </div>
+        </div>
+      )}
 
       {canManageForecastBatch && (
         <div className="bg-white p-5 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">

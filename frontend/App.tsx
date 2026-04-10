@@ -316,6 +316,8 @@ const App: React.FC = () => {
             filters={filters}
             setFilters={setFilters}
             isStoreFixed={currentUser.role === 'store_user'}
+            userRole={currentUser.role}
+            userName={currentUser.username}
           />
         )}
         {activeTab === 'dashboard' && (
@@ -330,6 +332,7 @@ const App: React.FC = () => {
             userRole={currentUser.role}
             currentUserName={currentUser.name}
             filters={filters}
+            onNavigateTab={handleTabChange}
           />
         )}
         {activeTab === 'inventory' && (

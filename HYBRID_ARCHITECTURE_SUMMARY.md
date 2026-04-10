@@ -1,432 +1,165 @@
-# Python ML Microservice Implementation Summary
+# PODS Hybrid Architecture Summary
 
-## Status: Backend Service Active (UI Removed)
+## Current Status
 
-**Note**: Frontend UI components for ML (MLDashboard, AnomalyVisualization, ForecastVisualization) have been removed. The Python ML microservice backend remains fully operational and available via API endpoints.
+PODS runs as a hybrid Node.js + Python platform designed around clear service boundaries:
 
-## Overview
+- Frontend: React + TypeScript UI served by Nginx
+- Backend: Node.js + Express API for auth, orchestration, auditability, and integrations
+- ML Service: Python + FastAPI microservice for anomaly detection and demand forecasting
+- Data Layer: PostgreSQL for transactional and analytical persistence
+- Reliability Layer: Redis for cache and BullMQ-backed forecast queueing
 
-PODS has a **hybrid Node.js + Python microservice architecture**:
-- **Node.js Backend** (Port 3001): REST APIs, authentication, identity and access
-- **Python ML Service** (Port 5000/5001): Advanced machine learning and anomaly detection
-- **API-First Design**: ML service callable via backend gateway (/api/ml/* endpoints)
+The current product is API-first. ML capabilities are consumed through backend and operational workflows rather than a dedicated standalone ML dashboard.
 
----
+## Why The Architecture Is Hybrid
 
-## Files Created
+PODS separates operational application concerns from ML execution concerns.
 
-### 1. **Python ML Service** (`ml-service/`)
+| Concern | Primary Runtime | Why |
+|---|---|---|
+| Authentication, RBAC, API contracts | Node.js backend | Centralized control and fast request orchestration |
+| Forecasting and anomaly inference | Python ML service | Native fit for scikit-learn, pandas, and numerical workloads |
+| Forecast review, queue control, audit logging | Node.js backend | Governance, persistence, and security boundaries |
+| User experience and workflow orchestration | React frontend | Operational views and role-aware workflows |
 
-#### `ml-service/main.py` (450+ lines)
-Complete FastAPI application with:
-- **Anomaly Detection** using scikit-learn Isolation Forest
-- **Demand Forecasting** using exponential smoothing
-- **Batch Analysis** for combined operations
-- **Health checks** and service info endpoints
-- Full request/response models with Pydantic validation
+This split lets the ML service evolve independently without forcing the rest of the platform to take on Python runtime concerns.
 
-**Key Features:**
-```python
-# Isolation Forest for anomaly detection
-detector = AnomalyDetector(contamination=0.05)
-results = detector.detect(datapoints)
+## Runtime Topology
 
-# Exponential smoothing with confidence intervals
-forecast, confidence, trend = DemandForecaster.forecast(
-    historical_demand, 
-    forecast_days=7
-)
+```text
+Browser
+  -> Nginx / Frontend
+  -> Node.js Backend (/api/*)
+      -> PostgreSQL
+      -> Redis
+      -> Google Gemini
+      -> Python ML Service
 ```
 
-#### `ml-service/requirements.txt`
-```
-fastapi==0.104.1
-uvicorn==0.24.0
-pydantic==2.5.0
-numpy==1.26.3
-pandas==2.1.4
-scikit-learn==1.3.2
-```
-
-Pre-configured for future additions (TensorFlow, PyTorch, MLflow).
-
-#### `ml-service/Dockerfile`
-- Python 3.11 slim base image
-- System dependencies for ML libraries
-- Health checks configured
-- Exposed port 5000
-
-### 2. **Node.js Backend Gateway** (`backend/src/routes/mlRoutes.ts`)
-
-New router that **proxies requests** to the Python ML service:
-
-```typescript
-router.post('/anomalies/detect', async (req, res) => {
-  const response = await fetch(`${ML_SERVICE_URL}/api/ml/anomalies/detect`, ...);
-  // Forward request to Python service
-});
-
-router.post('/forecast', async (req, res) => { ... });
-router.post('/batch-analysis', async (req, res) => { ... });
-router.get('/health', async (req, res) => { ... });
-router.get('/info', async (req, res) => { ... });
-```
-
-**Access via:** `http://localhost:3001/api/ml/*`
-
-### 3. **Docker Orchestration Updates**
-
-#### `docker-compose.yml` (Updated)
-Added ML service container:
-
-```yaml
-ml-service:
-  build:
-    context: ./ml-service
-    dockerfile: Dockerfile
-  container_name: pods-ml-service
-  ports:
-    - "5000:5000"
-  environment:
-    - DATABASE_URL=postgresql://pods_user:pods_password@postgres:5432/pods_db
-  depends_on:
-    postgres:
-      condition: service_healthy
-  healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-```
-
-**Updated Backend Server** (`backend/src/server.ts`)
-- Added ML router import
-- Added `/api/ml` route mounting
-- Service now routes ML requests to Python service
-
-### 4. **Documentation**
-
-#### `ML_SERVICE_API.md` (Comprehensive API Documentation)
-- **Architecture diagram** showing hybrid setup
-- **All endpoints documented** with examples
-- **Request/response schemas** with types
-- **Error handling guide**
-- **Performance characteristics**
-- **Future expansion pathways** (TensorFlow, PyTorch, MLflow)
-- **Testing examples** using cURL and Node.js
-
-#### `ML_DEVELOPMENT_GUIDE.md` (Development Guide)
-- **Local development setup** (virtual environment)
-- **Project structure** explanation
-- **Adding new endpoints** examples
-- **Integration guides** for ML frameworks:
-  - TensorFlow
-  - XGBoost
-  - scikit-learn
-- **Best practices:**
-  - Data validation
-  - Error handling
-  - Logging
-  - Performance optimization
-  - Model serialization
-- **Testing** with pytest
-- **Database connectivity** examples
-- **Deployment checklist**
-- **Troubleshooting guide**
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────┐
-│  React Frontend (Port 5173)              │
-│  ✓ MLDashboard (3-tab interface)         │
-│  ✓ AnomalyVisualization Component        │
-│  ✓ ForecastVisualization Component       │
-│  ✓ ML Service Client (mlService.ts)      │
-└──────────────────┬──────────────────────┘
-                   │
-┌──────────────────▼──────────────────────┐
-│  Node.js Backend (Port 3001)             │
-│  ✓ Auth & Session Management             │
-│  ✓ Identity & Access + RBAC              │
-│  ✓ Data APIs (Products, Routes)          │
-│  ✓ Chat with Gemini                      │
-│  ✓ ML Service Gateway (/api/ml/*)        │
-└──────────────────┬──────────────────────┘
-         ┌─────────┴──────────┐
-         │                    │
-    PostgreSQL          Python ML Service
-    Port 5432           Port 5001
-                        ✓ Anomaly Detection
-                        ✓ Forecasting
-                        ✓ ML Analytics
-```
-
----
-
-## API Endpoints (New)
-
-Accessible via Node.js gateway at `http://localhost:3001/api/ml`
-
-### Health & Info
-```
-GET  /api/ml/health        — Check ML service status
-GET  /api/ml/info          — Get service capabilities
-```
-
-### Analysis
-```
-POST /api/ml/anomalies/detect    — Detect inventory anomalies (Isolation Forest)
-POST /api/ml/forecast            — Forecast demand (Exponential Smoothing)
-POST /api/ml/batch-analysis      — Run multiple analyses
-```
-
-### Example Request
-```bash
-curl -X POST http://localhost:3001/api/ml/anomalies/detect \
-  -H "Content-Type: application/json" \
-  -d '{
-    "datapoints": [
-      {
-        "timestamp": "2026-03-02T10:00:00Z",
-        "product_id": "PROD_001",
-        "store_id": "STORE_001",
-        "current_stock": 100,
-        "avg_daily_demand": 25.5
-      }
-    ],
-    "sensitivity": 0.05
-  }'
-```
-
----
-
-## Local Development
-
-### Run Everything (Docker)
-```bash
-cd /path/to/podspro
-docker-compose up --build
-```
-
-Services:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
-- ML Service: http://localhost:5000
-- ML Docs: http://localhost:5000/docs (Swagger UI)
-
-### Run Just Python ML Service (Local)
-```bash
-cd ml-service
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 5000
-```
-
-Access:
-- Service: http://localhost:5000
-- Interactive Docs: http://localhost:5000/docs
-- Alternative Docs: http://localhost:5000/redoc
-
----
-
-## Key Features
-
-### 1. Anomaly Detection (Isolation Forest)
-
-```python
-# Detects:
-- Stock levels critically low (< 50% of average)
-- Stock levels unusually high (> 200% of average)
-- Demand surges (> 150% of average demand)
-- General statistical anomalies
-
-# Response includes:
-{
-  "is_anomaly": true,
-  "anomaly_score": 0.87,  # 0-1 scale
-  "reason": "Stock level (5) critically low (avg: 85.0)",
-  "recommended_action": "⚠️ Trigger emergency reorder"
-}
-```
-
-### 2. Demand Forecasting (Exponential Smoothing)
-
-```python
-# Input: Last 30-60 days of demand
-# Output: 
-{
-  "forecast": [24.2, 24.5, 24.8, 25.1, 25.4, 25.7, 26.0],
-  "confidence_interval": [12.5, 37.2],
-  "trend": "📈 Increasing"  # or "📉 Decreasing" or "➡️ Stable"
-}
-```
-
----
-
-## Extending the Service
-
-### Add TensorFlow
-```bash
-# Add to requirements.txt
-tensorflow==2.15.0
-
-# Then use in main.py
-import tensorflow as tf
-model = tf.keras.Sequential([...])
-```
-
-### Add XGBoost
-```bash
-# Add to requirements.txt
-xgboost==2.0.3
-
-# Then use in main.py
-import xgboost as xgb
-model = xgb.train(params, dtrain)
-```
-
-### Add MLflow (Model Versioning)
-```bash
-# Add to requirements.txt
-mlflow==2.9.1
-
-# Then track experiments
-import mlflow
-mlflow.log_metric("accuracy", score)
-mlflow.sklearn.log_model(model, "trained_model")
-```
-
----
-
-## Files Modified & Created
-
-| File | Type | Changes |
-|------|------|---------|
-| `docker-compose.yml` | Modified | Added ml-service container, port changed to 5001 |
-| `backend/src/server.ts` | Modified | Added mlRouter import and mount |
-| `backend/src/routes/mlRoutes.ts` | **NEW** | Gateway to Python service |
-| `frontend/services/mlService.ts` | **NEW** | TypeScript client for ML endpoints |
-| `frontend/components/MLDashboard.tsx` | **NEW** | Main dashboard with 3-tab interface |
-| `frontend/components/AnomalyVisualization.tsx` | **NEW** | Anomaly detection scanner with severity indicators |
-| `frontend/components/ForecastVisualization.tsx` | **NEW** | Demand forecasting with Recharts visualization |
-| `frontend/App.tsx` | Modified | Added ML Insights tab routing |
-| `frontend/Sidebar.tsx` | Modified | Added ML Insights menu item (🧠) |
-| `README.md` | Updated | Added ML Dashboard features, updated roadmap |
-
----
-
-## Testing the Integration
-
-### Check Everything is Running
-```bash
-# Frontend
-curl http://localhost:5173
-
-# Backend
-curl http://localhost:3001/api/health
-# Response: {"status":"ok","timestamp":"..."}
-
-# ML Service
-curl http://localhost:5000/health
-# Response: {"status":"healthy","service":"PODS ML Service",...}
-
-# Through Node.js Gateway
-curl http://localhost:3001/api/ml/health
-# Response: {"status":"healthy","mlService":{...}}
-```
-
-### Run an Actual Anomaly Detection
-```bash
-curl -X POST http://localhost:3001/api/ml/anomalies/detect \
-  -H "Content-Type: application/json" \
-  -d @- << 'EOF'
-{
-  "datapoints": [
-    {"timestamp":"2026-02-20T10:00:00Z","product_id":"P1","store_id":"S1","current_stock":100,"avg_daily_demand":20},
-    {"timestamp":"2026-02-21T10:00:00Z","product_id":"P1","store_id":"S1","current_stock":80,"avg_daily_demand":20},
-    {"timestamp":"2026-02-22T10:00:00Z","product_id":"P1","store_id":"S1","current_stock":60,"avg_daily_demand":20},
-    {"timestamp":"2026-02-23T10:00:00Z","product_id":"P1","store_id":"S1","current_stock":5,"avg_daily_demand":20}
-  ],
-  "sensitivity":0.05
-}
-EOF
-```
-
----
-
-## Deployment Steps
-
-### 1. Update docker-compose.yml ✅
-Added `ml-service` container with proper dependencies.
-
-### 2. Create Python ML service ✅
-FastAPI application with core ML models ready.
-
-### 3. Create Node.js gateway ✅
-Routes `/api/ml/*` requests to Python service.
-
-### 4. Build and Run ✅
-```bash
-docker-compose up --build
-```
-
-### 5. Verify Health ✅
-```bash
-curl http://localhost:3001/api/ml/health
-```
-
----
-
-## Completed Features ✅
-
-1. **Frontend UI** for anomaly/forecast visualization ✓ (AnomalyVisualization, ForecastVisualization)
-2. **Real-time Dashboard** showing ML insights ✓ (MLDashboard with 3-tab interface)
-3. **Frontend ML Service Client** for TypeScript integration ✓ (mlService.ts)
-4. **Sidebar Navigation** integration with ML Insights menu item ✓
-
-## Next Steps (Optional Enhancements)
-
-1. **Add TensorFlow Models** for advanced forecasting
-2. **Integrate MLflow** for model versioning
-3. **Create ML Model Training Pipeline** automated on new data
-4. **Add Caching** for frequently requested forecasts
-5. **Implement Feature Store** with Feast
-6. **Add GPU Support** for training
-7. **Real-time WebSocket streaming** for live dashboard updates
-8. **Advanced ARIMA/Prophet models** for seasonal forecasting
-
----
-
-## Summary
-
-✅ **Hybrid Architecture Ready**
-- Node.js handles APIs, auth, routing
-- Python handles ML, data science, advanced analytics
-- Both services communicate via REST
-- Fully containerized and orchestrated
-
-✅ **Production Ready Features**
-- Health checks on both services
-- Error handling and validation
-- Async/await for performance
-- Database connectivity
-- Comprehensive logging
-
-✅ **Extensible Design**
-- Easy to add new ML models
-- Pre-configured for TensorFlow, PyTorch, MLflow
-- Well-documented API contracts
-- Clear code structure
-
-✅ **Documentation Complete**
-- API reference with examples
-- Development guide for extending
-- Deployment instructions
-- Troubleshooting guide
-
----
-
-**Status:** ✅ Hybrid Node.js + Python architecture fully implemented  
-**Date:** March 1, 2026  
-**Version:** 1.0.0
+### Default Local Ports
+
+| Service | Internal Port | Local Access |
+|---|---:|---|
+| Frontend via Nginx | 80 | http://localhost |
+| Frontend alternate mapping | 80 | http://localhost:8080 |
+| Backend API | 3001 | http://localhost:3001/api |
+| ML service | 5000 | http://localhost:5001 |
+| PostgreSQL | 5432 | localhost:5432 |
+| Redis | 6379 | localhost:6379 |
+
+## Service Responsibilities
+
+### Frontend
+
+- Authenticated application shell and role-aware navigation
+- Operational views for inventory, logistics, command center, forecast governance, identity/access, and audit workflows
+- Calls backend APIs through `/api` and `/api/ml`
+
+### Backend
+
+- Signed bearer-token authentication with refresh/logout lifecycle
+- Role-aware authorization for protected workflows
+- Route orchestration for auth, data, chat, ML, users, and audit domains
+- OpenAPI publication at `/api/openapi.json` and `/api/v1/openapi.json`
+- Forecast batch scheduling, queue monitoring, and retry flows
+- Audit logging, CSV export, and digest-delivery configuration
+- Cache-backed ML proxy behavior with in-memory fallback when Redis is unavailable
+
+### ML Service
+
+- `POST /api/ml/anomalies/detect` for anomaly detection
+- `POST /api/ml/forecast` for demand forecasting with explainability
+- `POST /api/ml/batch-analysis` for direct combined ML analysis
+- `GET /health`, `GET /ready`, and `GET /api/ml/info` for service introspection
+
+The Node backend is the supported gateway for application clients. The Python service remains separately callable for direct service-level testing.
+
+## Key Operational Flows
+
+### 1. Forecast Batch Governance
+
+1. Admin or sysadmin triggers `POST /api/ml/forecast/batch/store-products`
+2. Backend validates identity, request shape, and optional `Idempotency-Key`
+3. Job is queued through BullMQ backed by Redis
+4. Worker fetches historical demand/features, calls the ML service, and persists forecasts
+5. Governance UI reads status from:
+   - `GET /api/ml/forecast/batch/status`
+   - `GET /api/ml/forecast/batch/queue`
+   - `GET /api/ml/forecast/batch/failed-jobs`
+   - `POST /api/ml/forecast/batch/retry`
+
+### 2. ML Request Handling
+
+1. Frontend sends authenticated request to backend
+2. Backend validates auth and payload
+3. Backend checks cache where applicable
+4. Backend forwards to Python ML service
+5. Response is returned to frontend and optionally persisted or audited
+
+### 3. AI-Assisted Operations
+
+1. User sends prompt to Decision Copilot
+2. Backend applies auth, request context, and rate limits
+3. Backend uses Gemini with timeout and fallback controls
+4. Operational data and ML endpoints remain available even if AI degrades
+
+## Reliability Characteristics
+
+- Backend readiness checks database, ML service, and cache dependency state
+- Redis powers queue durability and response caching; degraded fallback remains available when Redis is down
+- Forecast batch execution is retryable and observable
+- ML service failures do not take down core auth, data, or audit APIs
+- Signed tokens and route-level authorization protect forecast governance and admin flows
+
+## Current API Surface Highlights
+
+### Backend Platform
+
+- `/api/health`, `/api/ready`
+- `/api/v1/health`, `/api/v1/ready`
+- `/api/openapi.json`, `/api/v1/openapi.json`
+- `/api/auth/*`
+- `/api/chat/*`
+- `/api/data/*`
+- `/api/users/*`
+- `/api/audit/*`
+
+### Backend ML Gateway
+
+- `POST /api/ml/anomalies/detect`
+- `POST /api/ml/forecast`
+- `POST /api/ml/forecast/batch/store-products`
+- `GET /api/ml/forecast/batch/status`
+- `GET /api/ml/forecast/batch/queue`
+- `GET /api/ml/forecast/batch/failed-jobs`
+- `POST /api/ml/forecast/batch/retry`
+- `GET /api/ml/forecast/review-items`
+- `POST /api/ml/forecast/review-items/:productId/:storeId/decision`
+- `GET /api/ml/health`
+- `GET /api/ml/info`
+
+### Python ML Service
+
+- `GET /health`
+- `GET /ready`
+- `GET /api/ml/info`
+- `POST /api/ml/anomalies/detect`
+- `POST /api/ml/forecast`
+- `POST /api/ml/batch-analysis`
+
+## What Changed Relative To Older Docs
+
+- Dedicated ML visualization UI is no longer the source of truth for current architecture
+- Docker local frontend access is through `http://localhost` and `http://localhost:8080`
+- Redis is now a first-class runtime dependency for queueing and caching with graceful degradation
+- Forecast governance is durable and observable through batch status, queue, failed-job, and retry endpoints
+- Digest-delivery settings and history are now part of the audited operational workflow set
+- MLflow is not part of the current shipped runtime
+
+## Recommended Companion Docs
+
+- `README.md` for quick start and local access
+- `ML_SERVICE_API.md` for current ML endpoint behavior
+- `ML_DEVELOPMENT_GUIDE.md` for extending the Python service
+- `TECHNICAL_SYSTEM_HANDBOOK.md` for full-system technical reference

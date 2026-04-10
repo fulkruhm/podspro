@@ -19,7 +19,6 @@ PODS is a multi-service application with these major components:
 - `ml-service/`: Python FastAPI ML microservice
 - `postgres`: primary transactional and analytical store
 - `redis`: cache + BullMQ queue backend
-- `mlflow`: optional experiment tracking server
 
 Runtime flow:
 1. Frontend sends authenticated requests to backend API.
@@ -69,20 +68,23 @@ Includes:
 
 ## 5. API Surface (Backend)
 Major route groups under `/api` and `/api/v1`:
-- `/auth/*`
-- `/chat/*`
-- `/data/*`
-- `/users/*`
-- `/ml/*`
-- `/audit/*`
+- `/api/auth/*`
+- `/api/chat/*`
+- `/api/data/*`
+- `/api/users/*`
+- `/api/ml/*`
+- `/api/audit/*`
 
 Key operational endpoints:
-- Health/readiness: `/health`, `/ready`
-- OpenAPI: `/openapi.json`
-- Queue monitor: `/ml/forecast/batch/queue`
-- Failed jobs: `/ml/forecast/batch/failed-jobs`
-- Retry job: `/ml/forecast/batch/retry`
-- Audit logs: `/audit/logs`, `/audit/export`
+- Backend health/readiness: `/api/health`, `/api/ready`, `/api/v1/health`, `/api/v1/ready`
+- OpenAPI: `/api/openapi.json`, `/api/v1/openapi.json`
+- ML service health/readiness: `/health`, `/ready` on the Python service itself
+- Forecast batch status: `/api/ml/forecast/batch/status`
+- Queue monitor: `/api/ml/forecast/batch/queue`
+- Failed jobs: `/api/ml/forecast/batch/failed-jobs`
+- Retry job: `/api/ml/forecast/batch/retry`
+- Audit logs/export: `/api/audit/logs`, `/api/audit/export`
+- Digest delivery settings/actions: `/api/audit/digest-delivery`, `/api/audit/digest-delivery/send-now`
 
 ## 6. Security Model
 ### 6.1 Authentication
@@ -120,6 +122,8 @@ Primary roles:
 - `auth_refresh_tokens`
 - `auth_revoked_access_tokens`
 - `audit_logs`
+- `digest_delivery_configs`
+- `digest_delivery_history`
 
 ### 7.2 Forecast storage specifics
 `product_demand_forecast` includes:
@@ -156,19 +160,20 @@ Explainability strings are generated per forecast day and include:
 - feature/calendrical signals when available
 
 ## 9. Queueing and Batch Processing
-### 10.1 Queue backend
+### 9.1 Queue backend
 - BullMQ over Redis
 - idempotent batch trigger support (`Idempotency-Key`)
 - retry/backoff configuration from centralized env
 
-### 10.2 Batch flow
+### 9.2 Batch flow
 1. Trigger endpoint enqueues forecast batch run.
 2. Worker processes store-product items.
 3. Forecasts are persisted per item.
 4. Batch run status is updated (`success`, `partial_success`, `failed`).
 
-### 10.3 Observability endpoints
+### 9.3 Observability endpoints
 - queue depth and state
+- latest run and next scheduled run status
 - failed jobs listing
 - failed run retry endpoint
 
@@ -184,7 +189,7 @@ Explainability strings are generated per forecast day and include:
 ### 11.2 Action Intelligence panel
 - API client: `frontend/services/auditService.ts`
 - UI integration: `frontend/App.tsx`, `frontend/components/IdentityAccessView.tsx`
-- supports CSV export
+- supports CSV export and digest delivery settings/history
 
 ### 11.3 Forecast Governance admin panel
 - queue monitor
@@ -204,6 +209,7 @@ Explainability strings are generated per forecast day and include:
 - DB readiness
 - Redis connectivity
 - queue worker initialization
+- digest scheduler startup and SMTP configuration when email delivery is enabled
 
 ### 12.3 Environment handling
 - Keep secrets out of VCS

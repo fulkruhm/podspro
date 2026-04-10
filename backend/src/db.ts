@@ -45,6 +45,7 @@ interface UserWriteInput {
 
 let databaseInitialized = false;
 let auditLogPurgeTimer: NodeJS.Timeout | null = null;
+let databaseInitializationPromise: Promise<void> | null = null;
 
 const BATCH_RUN_STALE_MINUTES = appConfig.batchRunStaleMinutes;
 const AUDIT_LOG_RETENTION_DAYS = appConfig.auditLogRetentionDays;
@@ -219,6 +220,50 @@ async function ensureAuditLogTable() {
   );
 }
 
+async function ensureDigestDeliveryTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS digest_delivery_configs (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('daily', 'weekly')),
+      channel VARCHAR(20) NOT NULL CHECK (channel IN ('in_app', 'email')),
+      recipient VARCHAR(255) NOT NULL,
+      filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+      last_sent_at BIGINT,
+      next_run_at BIGINT,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (user_id)
+    )
+  `);
+
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_digest_delivery_configs_next_run ON digest_delivery_configs(next_run_at)'
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS digest_delivery_history (
+      id VARCHAR(255) PRIMARY KEY,
+      config_id INTEGER REFERENCES digest_delivery_configs(id) ON DELETE SET NULL,
+      user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sent_at BIGINT NOT NULL,
+      mode VARCHAR(20) NOT NULL CHECK (mode IN ('manual', 'scheduled')),
+      channel VARCHAR(20) NOT NULL CHECK (channel IN ('in_app', 'email')),
+      recipient VARCHAR(255) NOT NULL,
+      frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('daily', 'weekly')),
+      summary TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL CHECK (status IN ('sent', 'failed')),
+      error TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_digest_delivery_history_user_sent_at ON digest_delivery_history(user_id, sent_at DESC)'
+  );
+}
+
 // Initialize database connection on startup
 async function initializeDatabase() {
   try {
@@ -229,6 +274,7 @@ async function initializeDatabase() {
     await ensureForecastReviewDecisionTable();
     await ensureAuthTokenTables();
     await ensureAuditLogTable();
+    await ensureDigestDeliveryTables();
     databaseInitialized = true;
 
     if (appConfig.nodeEnv !== 'test') {
@@ -242,7 +288,15 @@ async function initializeDatabase() {
   }
 }
 
-initializeDatabase();
+databaseInitializationPromise = initializeDatabase();
+
+export async function waitForDatabaseInitialization() {
+  if (!databaseInitializationPromise) {
+    databaseInitializationPromise = initializeDatabase();
+  }
+
+  await databaseInitializationPromise;
+}
 
 export async function checkDatabaseReadiness() {
   if (!databaseInitialized) {
@@ -1305,6 +1359,47 @@ export interface AuditLogRecord {
   department: string | null;
 }
 
+export type DigestDeliveryFrequency = 'daily' | 'weekly';
+export type DigestDeliveryChannel = 'in_app' | 'email';
+
+export interface DigestDeliveryFilters {
+  userId?: string;
+  region?: string;
+  store?: string;
+  department?: string;
+  productId?: string;
+  severity?: AuditLogSeverity;
+  searchText?: string;
+}
+
+export interface DigestDeliveryConfigRecord {
+  id: number;
+  user_id: string;
+  enabled: boolean;
+  frequency: DigestDeliveryFrequency;
+  channel: DigestDeliveryChannel;
+  recipient: string;
+  filters: DigestDeliveryFilters;
+  last_sent_at: number | null;
+  next_run_at: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DigestDeliveryHistoryRecord {
+  id: string;
+  config_id: number | null;
+  user_id: string;
+  sent_at: number;
+  mode: 'manual' | 'scheduled';
+  channel: DigestDeliveryChannel;
+  recipient: string;
+  frequency: DigestDeliveryFrequency;
+  summary: string;
+  status: 'sent' | 'failed';
+  error: string | null;
+}
+
 export async function createAuditLog(input: {
   userId?: string | null;
   userName?: string | null;
@@ -1460,4 +1555,152 @@ export async function getAuditLogs(options: {
   );
 
   return result.rows as AuditLogRecord[];
+}
+
+export async function getDigestDeliveryConfigByUserId(userId: string) {
+  const result = await pool.query(
+    `
+      SELECT id, user_id, enabled, frequency, channel, recipient, filters, last_sent_at, next_run_at, created_at, updated_at
+      FROM digest_delivery_configs
+      WHERE user_id = $1
+      LIMIT 1
+    `,
+    [userId]
+  );
+
+  return (result.rows[0] as DigestDeliveryConfigRecord | undefined) ?? null;
+}
+
+export async function upsertDigestDeliveryConfig(input: {
+  userId: string;
+  enabled: boolean;
+  frequency: DigestDeliveryFrequency;
+  channel: DigestDeliveryChannel;
+  recipient: string;
+  filters: DigestDeliveryFilters;
+  nextRunAt: number | null;
+}) {
+  const result = await pool.query(
+    `
+      INSERT INTO digest_delivery_configs (
+        user_id, enabled, frequency, channel, recipient, filters, next_run_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        enabled = EXCLUDED.enabled,
+        frequency = EXCLUDED.frequency,
+        channel = EXCLUDED.channel,
+        recipient = EXCLUDED.recipient,
+        filters = EXCLUDED.filters,
+        next_run_at = EXCLUDED.next_run_at,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING id, user_id, enabled, frequency, channel, recipient, filters, last_sent_at, next_run_at, created_at, updated_at
+    `,
+    [
+      input.userId,
+      input.enabled,
+      input.frequency,
+      input.channel,
+      input.recipient,
+      JSON.stringify(input.filters || {}),
+      input.nextRunAt,
+    ]
+  );
+
+  return result.rows[0] as DigestDeliveryConfigRecord;
+}
+
+export async function updateDigestDeliveryRunResult(input: {
+  configId: number;
+  lastSentAt: number;
+  nextRunAt: number | null;
+}) {
+  await pool.query(
+    `
+      UPDATE digest_delivery_configs
+      SET
+        last_sent_at = $2,
+        next_run_at = $3,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `,
+    [input.configId, input.lastSentAt, input.nextRunAt]
+  );
+}
+
+export async function getDueDigestDeliveryConfigs(nowMs: number, limit = 25) {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+
+  const result = await pool.query(
+    `
+      SELECT id, user_id, enabled, frequency, channel, recipient, filters, last_sent_at, next_run_at, created_at, updated_at
+      FROM digest_delivery_configs
+      WHERE enabled = TRUE
+        AND next_run_at IS NOT NULL
+        AND next_run_at <= $1
+      ORDER BY next_run_at ASC
+      LIMIT $2
+    `,
+    [nowMs, safeLimit]
+  );
+
+  return result.rows as DigestDeliveryConfigRecord[];
+}
+
+export async function createDigestDeliveryHistory(input: {
+  configId: number | null;
+  userId: string;
+  sentAt: number;
+  mode: 'manual' | 'scheduled';
+  channel: DigestDeliveryChannel;
+  recipient: string;
+  frequency: DigestDeliveryFrequency;
+  summary: string;
+  status: 'sent' | 'failed';
+  error?: string | null;
+}) {
+  const id = `digest_hist_${randomUUID()}`;
+
+  const result = await pool.query(
+    `
+      INSERT INTO digest_delivery_history (
+        id, config_id, user_id, sent_at, mode, channel, recipient, frequency, summary, status, error
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id, config_id, user_id, sent_at, mode, channel, recipient, frequency, summary, status, error
+    `,
+    [
+      id,
+      input.configId,
+      input.userId,
+      input.sentAt,
+      input.mode,
+      input.channel,
+      input.recipient,
+      input.frequency,
+      input.summary,
+      input.status,
+      input.error ?? null,
+    ]
+  );
+
+  return result.rows[0] as DigestDeliveryHistoryRecord;
+}
+
+export async function getDigestDeliveryHistoryByUserId(userId: string, limit = 12) {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+
+  const result = await pool.query(
+    `
+      SELECT id, config_id, user_id, sent_at, mode, channel, recipient, frequency, summary, status, error
+      FROM digest_delivery_history
+      WHERE user_id = $1
+      ORDER BY sent_at DESC
+      LIMIT $2
+    `,
+    [userId, safeLimit]
+  );
+
+  return result.rows as DigestDeliveryHistoryRecord[];
 }

@@ -217,6 +217,38 @@ export const auditLogCreateBodySchema = z
   })
   .strict();
 
+const digestDeliveryFiltersSchema = z
+  .object({
+    userId: z.string().min(1).max(255).optional(),
+    region: z.string().min(1).max(255).optional(),
+    store: z.string().min(1).max(255).optional(),
+    department: z.string().min(1).max(255).optional(),
+    productId: z.string().min(1).max(255).optional(),
+    severity: z.enum(['info', 'warning', 'critical']).optional(),
+    searchText: z.string().max(200).optional(),
+  })
+  .strict();
+
+export const digestDeliveryConfigBodySchema = z
+  .object({
+    enabled: z.boolean(),
+    frequency: z.enum(['daily', 'weekly']),
+    channel: z.enum(['in_app', 'email']),
+    recipient: z.string().min(1).max(255),
+    filters: digestDeliveryFiltersSchema.optional(),
+  })
+  .strict();
+
+export const digestDeliverySendNowBodySchema = z
+  .object({
+    frequency: z.enum(['daily', 'weekly']).optional(),
+  })
+  .strict();
+
+export const digestDeliveryHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 // Generic ID validation for path parameters
 export const entityIdParamSchema = z.object({
   id: z.string().min(1).max(255),

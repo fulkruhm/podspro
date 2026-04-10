@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AuditLog, Product, User } from '../types';
-import { exportAuditLogsCsv, fetchAuditLogs } from '../services/auditService';
+import {
+  exportAuditLogsCsv,
+  fetchAuditLogs,
+  fetchDigestDeliverySettings,
+  saveDigestDeliverySettings,
+  sendDigestNow,
+  DigestDeliveryConfig,
+  DigestDeliveryHistoryItem,
+} from '../services/auditService';
 
 interface ActionIntelligenceViewProps {
   onClose: () => void;
@@ -27,6 +35,23 @@ const ActionIntelligenceView: React.FC<ActionIntelligenceViewProps> = ({
   const [toDate, setToDate] = useState('');
 
   const [searchText, setSearchText] = useState('');
+  const [digestWindow, setDigestWindow] = useState<'daily' | 'weekly'>('daily');
+  const [quickActionApplied, setQuickActionApplied] = useState(false);
+  const [isSendingDigest, setIsSendingDigest] = useState(false);
+  const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
+
+  const [deliveryConfig, setDeliveryConfig] = useState<DigestDeliveryConfig>({
+    id: null,
+    enabled: false,
+    frequency: 'daily',
+    channel: 'in_app',
+    recipient: 'ops-team',
+    filters: {},
+    lastSentAt: null,
+    nextRunAt: null,
+  });
+
+  const [deliveryHistory, setDeliveryHistory] = useState<DigestDeliveryHistoryItem[]>([]);
 
   const regionOptions = useMemo(
     () => ['all', ...Array.from(new Set(products.map((product) => product.region))).sort()],
@@ -125,6 +150,33 @@ const ActionIntelligenceView: React.FC<ActionIntelligenceViewProps> = ({
     toDate,
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDeliverySettings = async () => {
+      try {
+        const data = await fetchDigestDeliverySettings(12);
+        if (cancelled) {
+          return;
+        }
+        setDeliveryConfig(data.config);
+        setDeliveryHistory(data.history);
+        setDigestWindow(data.config.frequency);
+      } catch (loadError) {
+        console.error('Failed to load digest delivery settings:', loadError);
+        if (!cancelled) {
+          setDeliveryNotice('Digest delivery settings unavailable right now.');
+        }
+      }
+    };
+
+    void loadDeliverySettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const visibleLogs = useMemo(() => {
     const query = searchText.trim().toLowerCase();
     if (!query) {
@@ -151,6 +203,210 @@ const ActionIntelligenceView: React.FC<ActionIntelligenceViewProps> = ({
       ).length,
     };
   }, [visibleLogs]);
+
+  const insightCards = useMemo(() => {
+    const decisionLogs = visibleLogs.filter(
+      (log) => log.action === 'FORECAST_REVIEW_DECISION' || log.action === 'PRODUCT_UPDATE'
+    );
+
+    const topUserCounter = new Map<string, { label: string; count: number }>();
+    for (const log of decisionLogs) {
+      const key = log.userId || 'unknown';
+      const label = log.userName || 'unknown';
+      const current = topUserCounter.get(key);
+      if (current) {
+        current.count += 1;
+      } else {
+        topUserCounter.set(key, { label, count: 1 });
+      }
+    }
+
+    const topUser = Array.from(topUserCounter.values()).sort((a, b) => b.count - a.count)[0];
+
+    const incidentLogs = visibleLogs.filter(
+      (log) => log.severity === 'warning' || log.severity === 'critical'
+    );
+
+    const hotspotStoreCounter = new Map<string, number>();
+    for (const log of incidentLogs) {
+      if (!log.store) continue;
+      hotspotStoreCounter.set(log.store, (hotspotStoreCounter.get(log.store) || 0) + 1);
+    }
+    const topStoreEntry = Array.from(hotspotStoreCounter.entries()).sort((a, b) => b[1] - a[1])[0];
+
+    const productCounter = new Map<string, { label: string; count: number }>();
+    for (const log of incidentLogs) {
+      const key = log.productId || log.productName || '';
+      if (!key) continue;
+      const label = log.productName || log.productId || 'Unknown SKU';
+      const current = productCounter.get(key);
+      if (current) {
+        current.count += 1;
+      } else {
+        productCounter.set(key, { label, count: 1 });
+      }
+    }
+    const topProduct = Array.from(productCounter.values()).sort((a, b) => b.count - a.count)[0];
+
+    const repeatPatternCounter = new Map<
+      string,
+      { action: string; store: string; product: string; count: number; latest: number }
+    >();
+    for (const log of incidentLogs) {
+      const action = log.action || 'UNKNOWN_ACTION';
+      const store = log.store || 'unknown store';
+      const product = log.productName || log.productId || 'unknown product';
+      const key = `${action}::${store}::${product}`;
+      const current = repeatPatternCounter.get(key);
+      if (current) {
+        current.count += 1;
+        current.latest = Math.max(current.latest, log.timestamp);
+      } else {
+        repeatPatternCounter.set(key, {
+          action,
+          store,
+          product,
+          count: 1,
+          latest: log.timestamp,
+        });
+      }
+    }
+
+    const repeatPattern = Array.from(repeatPatternCounter.values())
+      .filter((entry) => entry.count >= 3)
+      .sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+        return b.latest - a.latest;
+      })[0];
+
+    return {
+      topUser,
+      topStoreEntry,
+      topProduct,
+      repeatPattern,
+    };
+  }, [visibleLogs]);
+
+  const digestSummary = useMemo(() => {
+    const windowMs = digestWindow === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const currentStart = now - windowMs;
+    const previousStart = currentStart - windowMs;
+
+    const currentLogs = visibleLogs.filter((log) => log.timestamp >= currentStart && log.timestamp <= now);
+    const previousLogs = visibleLogs.filter(
+      (log) => log.timestamp >= previousStart && log.timestamp < currentStart
+    );
+
+    const currentWarnings = currentLogs.filter(
+      (log) => log.severity === 'warning' || log.severity === 'critical'
+    ).length;
+    const previousWarnings = previousLogs.filter(
+      (log) => log.severity === 'warning' || log.severity === 'critical'
+    ).length;
+
+    const currentCritical = currentLogs.filter((log) => log.severity === 'critical').length;
+    const previousCritical = previousLogs.filter((log) => log.severity === 'critical').length;
+
+    const actionCounter = new Map<string, number>();
+    for (const log of currentLogs) {
+      actionCounter.set(log.action, (actionCounter.get(log.action) || 0) + 1);
+    }
+    const topActions = Array.from(actionCounter.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
+    const storeCounter = new Map<string, number>();
+    for (const log of currentLogs) {
+      const key = log.store || 'unknown';
+      storeCounter.set(key, (storeCounter.get(key) || 0) + 1);
+    }
+    const topStore = Array.from(storeCounter.entries()).sort((a, b) => b[1] - a[1])[0];
+
+    const userCounter = new Map<string, number>();
+    for (const log of currentLogs) {
+      const key = log.userName || 'unknown';
+      userCounter.set(key, (userCounter.get(key) || 0) + 1);
+    }
+    const topUser = Array.from(userCounter.entries()).sort((a, b) => b[1] - a[1])[0];
+
+    const safeChangePct = (current: number, previous: number) => {
+      if (previous <= 0) {
+        return current > 0 ? 100 : 0;
+      }
+      return Math.round(((current - previous) / previous) * 100);
+    };
+
+    const actionChangePct = safeChangePct(currentLogs.length, previousLogs.length);
+    const warningChangePct = safeChangePct(currentWarnings, previousWarnings);
+    const criticalChangePct = safeChangePct(currentCritical, previousCritical);
+
+    const direction = (value: number) => (value > 0 ? 'up' : value < 0 ? 'down' : 'flat');
+
+    const bullets = [
+      `${digestWindow === 'daily' ? 'Past 24h' : 'Past 7d'} volume is ${currentLogs.length.toLocaleString()} actions (${direction(actionChangePct)} ${Math.abs(actionChangePct)}% vs previous window).`,
+      `Warnings/critical are ${currentWarnings.toLocaleString()} (${direction(warningChangePct)} ${Math.abs(warningChangePct)}%), with critical at ${currentCritical.toLocaleString()} (${direction(criticalChangePct)} ${Math.abs(criticalChangePct)}%).`,
+      topStore
+        ? `Highest activity location is ${topStore[0]} with ${topStore[1].toLocaleString()} actions in this window.`
+        : 'No store-linked activity in this window.',
+      topUser
+        ? `Most active user is ${topUser[0]} with ${topUser[1].toLocaleString()} actions in this window.`
+        : 'No user activity in this window.',
+    ];
+
+    return {
+      currentLogsCount: currentLogs.length,
+      previousLogsCount: previousLogs.length,
+      currentWarnings,
+      currentCritical,
+      topActions,
+      topStore,
+      bullets,
+    };
+  }, [visibleLogs, digestWindow]);
+
+  const sendDigestNowAction = async () => {
+    if (isSendingDigest) {
+      return;
+    }
+
+    setIsSendingDigest(true);
+    try {
+      const result = await sendDigestNow({ frequency: deliveryConfig.frequency });
+      const refreshed = await fetchDigestDeliverySettings(12);
+      setDeliveryConfig(refreshed.config);
+      setDeliveryHistory(refreshed.history);
+      setDeliveryNotice(`Digest sent: ${result.summary}`);
+    } catch (sendError) {
+      const message = sendError instanceof Error ? sendError.message : 'Failed to send digest.';
+      setDeliveryNotice(message);
+    } finally {
+      setIsSendingDigest(false);
+    }
+  };
+
+  const isQuickActionStateActive =
+    quickActionApplied &&
+    (severityFilter === 'critical' || storeFilter !== 'all' || searchText.trim().length > 0);
+
+  const formatNextRun = (nextRunAt: number | null) => {
+    if (!nextRunAt) {
+      return 'Not scheduled';
+    }
+    return new Date(nextRunAt).toLocaleString();
+  };
+
+  const buildDeliveryFiltersPayload = () => ({
+    userId: userFilter === 'all' ? undefined : userFilter,
+    region: regionFilter === 'all' ? undefined : regionFilter,
+    store: storeFilter === 'all' ? undefined : storeFilter,
+    department: departmentFilter === 'all' ? undefined : departmentFilter,
+    productId: productFilter === 'all' ? undefined : productFilter,
+    severity: severityFilter === 'all' ? undefined : severityFilter,
+    searchText: searchText.trim() || undefined,
+  });
 
   const handleExport = () => {
     const from = fromDate ? new Date(`${fromDate}T00:00:00.000`).getTime() : undefined;
@@ -234,6 +490,365 @@ const ActionIntelligenceView: React.FC<ActionIntelligenceViewProps> = ({
           <div className="text-2xl font-black text-slate-900 mt-1">{summary.criticalOrWarning}</div>
         </div>
       </div>
+
+      <section className="bg-white rounded-2xl border-2 border-slate-300 p-5 md:p-6 text-slate-900 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-black uppercase tracking-widest text-slate-900">
+              Insight Spotlight
+            </h3>
+            <p className="text-sm text-slate-700 mt-1 font-medium">
+              High-signal patterns from the currently filtered action trail.
+            </p>
+          </div>
+          <span className="text-[11px] font-black uppercase tracking-widest bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg text-emerald-800">
+            Live
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 shadow-sm">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-700">
+              Top Decision Owner
+            </div>
+            <div className="text-base font-extrabold text-slate-900 mt-2 leading-tight">
+              {insightCards.topUser?.label || 'No decision events'}
+            </div>
+            <div className="text-sm text-slate-700 mt-1 font-medium">
+              {(insightCards.topUser?.count || 0).toLocaleString()} forecast or product decisions
+            </div>
+          </div>
+
+          <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 shadow-sm">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-700">
+              Store Hotspot
+            </div>
+            <div className="text-base font-extrabold text-slate-900 mt-2 leading-tight">
+              {insightCards.topStoreEntry?.[0] || 'No incidents'}
+            </div>
+            <div className="text-sm text-slate-700 mt-1 font-medium">
+              {(insightCards.topStoreEntry?.[1] || 0).toLocaleString()} warning/critical events
+            </div>
+          </div>
+
+          <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 shadow-sm">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-700">
+              SKU Under Attention
+            </div>
+            <div className="text-base font-extrabold text-slate-900 mt-2 leading-tight">
+              {insightCards.topProduct?.label || 'No SKU incidents'}
+            </div>
+            <div className="text-sm text-slate-700 mt-1 font-medium">
+              {(insightCards.topProduct?.count || 0).toLocaleString()} warning/critical actions
+            </div>
+          </div>
+
+          <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 shadow-sm">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-700">
+              Repeat Incident Pattern
+            </div>
+            <div className="text-base font-extrabold text-slate-900 mt-2 leading-tight">
+              {insightCards.repeatPattern
+                ? `${insightCards.repeatPattern.action} @ ${insightCards.repeatPattern.store}`
+                : 'No repeat pattern'}
+            </div>
+            <div className="text-sm text-slate-700 mt-1 font-medium">
+              {insightCards.repeatPattern
+                ? `${insightCards.repeatPattern.count}x for ${insightCards.repeatPattern.product}`
+                : 'Needs at least 3 similar warning/critical incidents'}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">
+              Operations Digest
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Natural-language summary from currently filtered logs.
+            </p>
+          </div>
+          <div className="inline-flex rounded-xl border border-slate-200 p-1 bg-slate-50">
+            <button
+              type="button"
+              onClick={() => setDigestWindow('daily')}
+              className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition ${
+                digestWindow === 'daily'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-white'
+              }`}
+            >
+              Daily
+            </button>
+            <button
+              type="button"
+              onClick={() => setDigestWindow('weekly')}
+              className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition ${
+                digestWindow === 'weekly'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-white'
+              }`}
+            >
+              Weekly
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Actions</p>
+            <p className="text-base font-black text-slate-900 mt-1">
+              {digestSummary.currentLogsCount.toLocaleString()}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Prev: {digestSummary.previousLogsCount.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              Warn/Critical
+            </p>
+            <p className="text-base font-black text-slate-900 mt-1">
+              {digestSummary.currentWarnings.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Critical</p>
+            <p className="text-base font-black text-slate-900 mt-1">
+              {digestSummary.currentCritical.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Top Actions</p>
+            <p className="text-[11px] text-slate-700 mt-1 leading-relaxed">
+              {digestSummary.topActions.length > 0
+                ? digestSummary.topActions
+                    .map(([action, count]) => `${action} (${count})`)
+                    .join(', ')
+                : 'No actions in this window'}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 p-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+            Digest Narrative
+          </p>
+          <div className="space-y-1.5">
+            {digestSummary.bullets.map((line) => (
+              <p key={line} className="text-xs text-slate-700">
+                - {line}
+              </p>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSeverityFilter('critical');
+                setQuickActionApplied(true);
+              }}
+              className="px-3 py-2 rounded-lg bg-red-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition"
+            >
+              Open Critical Events
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!digestSummary.topStore || digestSummary.topStore[0] === 'unknown') return;
+                setStoreFilter(digestSummary.topStore[0]);
+                setQuickActionApplied(true);
+              }}
+              disabled={!digestSummary.topStore || digestSummary.topStore[0] === 'unknown'}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition disabled:opacity-50"
+            >
+              Open Top Store Events
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const topAction = digestSummary.topActions[0]?.[0];
+                if (!topAction) return;
+                setSearchText(topAction);
+                setQuickActionApplied(true);
+              }}
+              disabled={digestSummary.topActions.length === 0}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition disabled:opacity-50"
+            >
+              Open Top Action Events
+            </button>
+            {isQuickActionStateActive && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSeverityFilter('all');
+                  setStoreFilter('all');
+                  setSearchText('');
+                  setQuickActionApplied(false);
+                }}
+                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-600 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition"
+              >
+                Reset Quick Actions
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">
+              Digest Delivery
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Server-backed schedule and delivery with saved history.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700">
+            <input
+              type="checkbox"
+              checked={deliveryConfig.enabled}
+              onChange={(event) =>
+                setDeliveryConfig((previous) => ({
+                  ...previous,
+                  enabled: event.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            Enable schedule
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+              Frequency
+            </p>
+            <select
+              value={deliveryConfig.frequency}
+              onChange={(event) => {
+                const nextFrequency = event.target.value as DigestDeliveryConfig['frequency'];
+                setDeliveryConfig((previous) => ({
+                  ...previous,
+                  frequency: nextFrequency,
+                }));
+                setDigestWindow(nextFrequency);
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+              Channel
+            </p>
+            <select
+              value={deliveryConfig.channel}
+              onChange={(event) =>
+                setDeliveryConfig((previous) => ({
+                  ...previous,
+                  channel: event.target.value as DigestDeliveryConfig['channel'],
+                }))
+              }
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700"
+            >
+              <option value="in_app">In App</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+              Recipient
+            </p>
+            <input
+              value={deliveryConfig.recipient}
+              onChange={(event) =>
+                setDeliveryConfig((previous) => ({
+                  ...previous,
+                  recipient: event.target.value,
+                }))
+              }
+              placeholder="team@company.com"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <p className="text-xs text-slate-700 font-medium">
+            Next run: <span className="font-black">{formatNextRun(deliveryConfig.nextRunAt)}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const saved = await saveDigestDeliverySettings({
+                    enabled: true,
+                    frequency: deliveryConfig.frequency,
+                    channel: deliveryConfig.channel,
+                    recipient: deliveryConfig.recipient,
+                    filters: buildDeliveryFiltersPayload(),
+                  });
+                  setDeliveryConfig(saved);
+                  setDigestWindow(saved.frequency);
+                  setDeliveryNotice('Digest schedule saved.');
+                } catch (saveError) {
+                  const message = saveError instanceof Error ? saveError.message : 'Failed to save schedule.';
+                  setDeliveryNotice(message);
+                }
+              }}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-white transition"
+            >
+              Save Schedule
+            </button>
+            <button
+              type="button"
+              onClick={() => void sendDigestNowAction()}
+              disabled={isSendingDigest || !deliveryConfig.recipient.trim()}
+              className="px-3 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {isSendingDigest ? 'Sending...' : 'Send Digest Now'}
+            </button>
+          </div>
+        </div>
+
+        {deliveryNotice && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+            {deliveryNotice}
+          </div>
+        )}
+
+        <div className="rounded-xl border border-slate-200 p-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+            Delivery History
+          </p>
+          {deliveryHistory.length === 0 ? (
+            <p className="text-xs text-slate-500">No deliveries sent yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {deliveryHistory.map((item) => (
+                <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-[11px] font-bold text-slate-800">
+                    {new Date(item.sentAt).toLocaleString()} | {item.mode} | {item.channel}
+                  </p>
+                  <p className="text-[11px] text-slate-600">{item.frequency}{' -> '}{item.recipient}</p>
+                  <p className="text-[11px] text-slate-600">{item.summary}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">

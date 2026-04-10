@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Product, Filters } from '../types';
+import { Product, Filters, Role } from '../types';
 
 interface FilterBarProps {
   products: Product[];
@@ -8,10 +8,54 @@ interface FilterBarProps {
   filters: Filters;
   setFilters: (filters: Filters) => void;
   isStoreFixed?: boolean;
+  userRole: Role;
+  userName: string;
 }
 
-const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters, setFilters, isStoreFixed }) => {
+interface SavedPreset {
+  id: string;
+  name: string;
+  filters: Filters;
+}
+
+const FilterBar: React.FC<FilterBarProps> = ({
+  products,
+  filteredCount,
+  filters,
+  setFilters,
+  isStoreFixed,
+  userRole,
+  userName,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const presetStorageKey = `pods_filter_presets_${userRole}_${userName}`;
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [savedPresets, setSavedPresets] = useState<SavedPreset[]>(() => {
+    try {
+      const raw = localStorage.getItem(presetStorageKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as SavedPreset[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const persistPresets = (nextPresets: SavedPreset[]) => {
+    setSavedPresets(nextPresets);
+    localStorage.setItem(presetStorageKey, JSON.stringify(nextPresets));
+  };
+
+  const normalizePresetFilters = (presetFilters: Filters): Filters => {
+    if (!isStoreFixed) {
+      return presetFilters;
+    }
+
+    return {
+      ...presetFilters,
+      store: filters.store,
+    };
+  };
 
   const regions = Array.from(new Set(products.map(p => p.region))).sort();
   const productsForStores = filters.region
@@ -70,6 +114,35 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
       product: '',
       status: '' 
     });
+  };
+
+  const saveCurrentPreset = () => {
+    const name = window.prompt('Preset name');
+    if (!name || !name.trim()) return;
+
+    const preset: SavedPreset = {
+      id: `preset_${Date.now()}`,
+      name: name.trim(),
+      filters,
+    };
+
+    const next = [preset, ...savedPresets].slice(0, 12);
+    persistPresets(next);
+    setSelectedPresetId(preset.id);
+  };
+
+  const applyPreset = (presetId: string) => {
+    const preset = savedPresets.find((entry) => entry.id === presetId);
+    if (!preset) return;
+    setFilters(normalizePresetFilters(preset.filters));
+    setSelectedPresetId(preset.id);
+  };
+
+  const deleteSelectedPreset = () => {
+    if (!selectedPresetId) return;
+    const next = savedPresets.filter((preset) => preset.id !== selectedPresetId);
+    persistPresets(next);
+    setSelectedPresetId('');
   };
 
   const clearFilterLevel = (level: 'region' | 'store' | 'department' | 'product' | 'status') => {
@@ -209,6 +282,41 @@ const FilterBar: React.FC<FilterBarProps> = ({ products, filteredCount, filters,
                 Status: {filters.status} ×
               </button>
             )}
+          </div>
+        )}
+
+        {isExpanded && (
+          <div className="flex flex-col md:flex-row md:items-center gap-2 pt-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Presets ({userRole})
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={selectedPresetId}
+                onChange={(e) => applyPreset(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
+              >
+                <option value="">Select preset</option>
+                {savedPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={saveCurrentPreset}
+                className="px-3 py-2 rounded-xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700"
+              >
+                Save Current
+              </button>
+              <button
+                onClick={deleteSelectedPreset}
+                disabled={!selectedPresetId}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         )}
 

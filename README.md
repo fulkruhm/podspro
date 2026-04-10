@@ -222,8 +222,8 @@ GEMINI_FAST_MODEL=gemini-3.1-pro-preview
 GEMINI_PRO_MODEL=gemini-3.1-pro-preview
 GEMINI_ANOMALY_MODEL=gemini-3-flash-preview
 NODE_ENV=development
-ML_SERVICE_URL=http://ml-service:5000
-FRONTEND_URL=http://localhost:5173
+ML_SERVICE_URL=http://localhost:5000
+FRONTEND_URL=http://localhost:3000
 AUTH_SECRET=replace_with_long_random_secret
 AUTH_TOKEN_TTL_MINUTES=480
 REFRESH_TOKEN_TTL_MINUTES=10080
@@ -240,21 +240,39 @@ FORECAST_BATCH_HOUR=2
 FORECAST_BATCH_MINUTE=0
 AUDIT_LOG_RETENTION_DAYS=30
 AUDIT_LOG_PURGE_INTERVAL_MINUTES=60
+DIGEST_SCHEDULER_POLL_SECONDS=60
+DIGEST_SMTP_HOST=smtp.example.com
+DIGEST_SMTP_PORT=587
+DIGEST_SMTP_SECURE=false
+DIGEST_SMTP_USER=smtp_user
+DIGEST_SMTP_PASS=smtp_password
+DIGEST_EMAIL_FROM=pods@example.com
 ```
 
 **ML Service `.env`**
 ```env
 # Comma-separated CORS origins, supports '*' for fully open mode
-CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173
+CORS_ALLOW_ORIGINS=http://localhost:3000
 ```
 
-**Frontend `.env`**
+**Frontend dev overrides (optional)**
 ```env
-VITE_API_BASE_URL=http://localhost:3001/api
+VITE_DEV_HOST=127.0.0.1
+VITE_DEV_PORT=3000
 ```
 
 Note: frontend runtime configuration is currently maintained in `frontend/config/appConfig.ts`.
-`VITE_API_BASE_URL` is not used by the current frontend code path.
+The frontend uses `/api` and `/api/ml` from `frontend/config/appConfig.ts`; `VITE_API_BASE_URL` is not used by the current frontend code path.
+
+Start the ML service separately for manual development:
+
+```bash
+cd ml-service
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
 
 ```bash
 npm install
@@ -292,6 +310,13 @@ Configuration is maintained in a single source per runtime:
 | `BATCH_RUN_STALE_MINUTES` | `45` | `backend/src/config/env.ts` | Running batch stale timeout |
 | `AUDIT_LOG_RETENTION_DAYS` | `30` | `backend/src/config/env.ts` | Retain audit rows for N days before purge |
 | `AUDIT_LOG_PURGE_INTERVAL_MINUTES` | `60` | `backend/src/config/env.ts` | How often retention purge runs |
+| `DIGEST_SCHEDULER_POLL_SECONDS` | `60` | `backend/src/config/env.ts` | Digest delivery scheduler polling interval |
+| `DIGEST_SMTP_HOST` | unset | `backend/src/config/env.ts` | Optional SMTP host for email digest delivery |
+| `DIGEST_SMTP_PORT` | `587` | `backend/src/config/env.ts` | SMTP port for digest email transport |
+| `DIGEST_SMTP_SECURE` | `false` | `backend/src/config/env.ts` | Whether SMTP transport uses implicit TLS |
+| `DIGEST_SMTP_USER` | unset | `backend/src/config/env.ts` | Optional SMTP username |
+| `DIGEST_SMTP_PASS` | unset | `backend/src/config/env.ts` | Optional SMTP password |
+| `DIGEST_EMAIL_FROM` | unset | `backend/src/config/env.ts` | Optional sender address for digest emails |
 | `ML_ANOMALY_CACHE_TTL_SECONDS` | `120` | `backend/src/config/env.ts` | Anomaly response cache TTL |
 | `ML_FORECAST_CACHE_TTL_SECONDS` | `300` | `backend/src/config/env.ts` | Forecast response cache TTL |
 | `ML_INFO_CACHE_TTL_SECONDS` | `600` | `backend/src/config/env.ts` | ML info response cache TTL |
@@ -320,7 +345,7 @@ All backend runtime configuration now resolves through `backend/src/config/env.t
 | `ML_SERVICE_VERSION` | `1.0.0` | `ml-service/config.py` | Reported by info endpoint |
 | `ML_SERVICE_HOST` | `0.0.0.0` | `ml-service/config.py` | Uvicorn bind host |
 | `ML_SERVICE_PORT` | `5000` | `ml-service/config.py` | Uvicorn bind port |
-| `CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://localhost:5173` | `ml-service/config.py` | Comma-separated list or `*` |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://localhost:5173` | `ml-service/config.py` | Comma-separated list or `*`; use `http://localhost:3000` for the default local frontend |
 
 ---
 
@@ -332,8 +357,10 @@ docker-compose up --build
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:5173 |
+| Frontend (Nginx) | http://localhost |
+| Frontend (alternate mapped port) | http://localhost:8080 |
 | API | http://localhost:3001/api |
+| ML service | http://localhost:5001 |
 | Redis | redis://localhost:6379 |
 | Nginx Proxy | http://localhost |
 
@@ -373,11 +400,15 @@ GET   /api/chat/realtime-data — Fetch live inventory & logistics data
 POST  /api/ml/anomalies/detect  — Run Isolation Forest anomaly detection
 POST  /api/ml/forecast          — Generate demand forecast with confidence intervals
 POST  /api/ml/forecast/batch/store-products — Queue durable forecast batch run (admin/sysadmin)
+GET   /api/ml/forecast/batch/status         — Latest batch run and next scheduled execution (admin/sysadmin)
 GET   /api/ml/forecast/batch/queue          — Queue depth/health metrics (admin/sysadmin)
 GET   /api/ml/forecast/batch/failed-jobs    — Failed queue jobs for diagnostics (admin/sysadmin)
 POST  /api/ml/forecast/batch/retry          — Retry failed run by run_id (admin/sysadmin)
 GET   /api/ml/health            — ML service health check
 GET   /api/ml/info              — Service capabilities and model info
+GET   /api/audit/digest-delivery           — Read per-user digest delivery settings/history (admin/sysadmin)
+PUT   /api/audit/digest-delivery           — Save digest delivery settings (admin/sysadmin)
+POST  /api/audit/digest-delivery/send-now  — Trigger immediate digest delivery (admin/sysadmin)
 GET   /api/audit/logs           — Query Action Intelligence data (admin/sysadmin)
 POST  /api/audit/logs           — Record structured audit event (authenticated user)
 GET   /api/audit/export         — Export audit logs as CSV (admin/sysadmin)

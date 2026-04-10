@@ -1,12 +1,25 @@
 import { Router, Request, Response } from 'express';
-import { createAuditLog, getAuditLogs, AuditLogCategory, AuditLogSeverity } from '../db.js';
+import {
+  createAuditLog,
+  getAuditLogs,
+  AuditLogCategory,
+  AuditLogSeverity,
+  getDigestDeliveryConfigByUserId,
+  upsertDigestDeliveryConfig,
+  getDigestDeliveryHistoryByUserId,
+  getUserById,
+} from '../db.js';
 import { requireAnyRole, requireAuthenticatedUser, getIdentity } from '../middleware/authz.js';
 import {
   validateRequestBody,
   validateRequestQuery,
   auditLogCreateBodySchema,
   auditLogQuerySchema,
+  digestDeliveryConfigBodySchema,
+  digestDeliverySendNowBodySchema,
+  digestDeliveryHistoryQuerySchema,
 } from '../middleware/validation.js';
+import { computeNextDigestRunAt, executeDigestDelivery } from '../services/digestDeliveryService.js';
 
 export const auditRouter = Router();
 
@@ -136,6 +149,126 @@ auditRouter.get(
     } catch (error: unknown) {
       console.error('Audit logs export failed:', getErrorMessage(error));
       res.status(500).json({ error: 'Failed to export audit logs' });
+    }
+  }
+);
+
+auditRouter.get(
+  '/digest-delivery',
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestQuery(digestDeliveryHistoryQuerySchema),
+  async (_req: Request, res: Response) => {
+    try {
+      const identity = getIdentity(res);
+      if (!identity) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const [savedConfig, history, user] = await Promise.all([
+        getDigestDeliveryConfigByUserId(identity.userId),
+        getDigestDeliveryHistoryByUserId(identity.userId, Number(_req.query.limit) || 12),
+        getUserById(identity.userId),
+      ]);
+
+      const config =
+        savedConfig ||
+        {
+          id: null,
+          user_id: identity.userId,
+          enabled: false,
+          frequency: 'daily',
+          channel: 'in_app',
+          recipient: user?.email || identity.username,
+          filters: {},
+          last_sent_at: null,
+          next_run_at: null,
+        };
+
+      return res.json({ config, history });
+    } catch (error: unknown) {
+      console.error('Digest delivery settings fetch failed:', getErrorMessage(error));
+      return res.status(500).json({ error: 'Failed to fetch digest delivery settings' });
+    }
+  }
+);
+
+auditRouter.put(
+  '/digest-delivery',
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestBody(digestDeliveryConfigBodySchema),
+  async (req: Request, res: Response) => {
+    try {
+      const identity = getIdentity(res);
+      if (!identity) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const saved = await upsertDigestDeliveryConfig({
+        userId: identity.userId,
+        enabled: req.body.enabled,
+        frequency: req.body.frequency,
+        channel: req.body.channel,
+        recipient: req.body.recipient,
+        filters: req.body.filters || {},
+        nextRunAt: req.body.enabled ? computeNextDigestRunAt(req.body.frequency) : null,
+      });
+
+      return res.json({ config: saved });
+    } catch (error: unknown) {
+      console.error('Digest delivery settings save failed:', getErrorMessage(error));
+      return res.status(500).json({ error: 'Failed to save digest delivery settings' });
+    }
+  }
+);
+
+auditRouter.post(
+  '/digest-delivery/send-now',
+  requireAnyRole(['admin', 'sysadmin']),
+  validateRequestBody(digestDeliverySendNowBodySchema),
+  async (req: Request, res: Response) => {
+    try {
+      const identity = getIdentity(res);
+      if (!identity) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const user = await getUserById(identity.userId);
+      const existing = await getDigestDeliveryConfigByUserId(identity.userId);
+
+      const config =
+        existing ||
+        (await upsertDigestDeliveryConfig({
+          userId: identity.userId,
+          enabled: false,
+          frequency: req.body.frequency || 'daily',
+          channel: 'in_app',
+          recipient: user?.email || identity.username,
+          filters: {},
+          nextRunAt: null,
+        }));
+
+      const effectiveConfig =
+        req.body.frequency && req.body.frequency !== config.frequency
+          ? { ...config, frequency: req.body.frequency }
+          : config;
+
+      const deliveryResult = await executeDigestDelivery(effectiveConfig, 'manual');
+
+      if (deliveryResult.status === 'failed') {
+        return res.status(502).json({
+          error: 'Digest delivery failed',
+          details: deliveryResult.error,
+          summary: deliveryResult.summaryText,
+        });
+      }
+
+      return res.json({
+        status: deliveryResult.status,
+        summary: deliveryResult.summaryText,
+      });
+    } catch (error: unknown) {
+      console.error('Digest delivery send-now failed:', getErrorMessage(error));
+      return res.status(500).json({ error: 'Failed to send digest now' });
     }
   }
 );

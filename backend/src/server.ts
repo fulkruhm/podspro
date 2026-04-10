@@ -17,6 +17,7 @@ import { checkDatabaseReadiness } from './db.js';
 import { openApiSpec } from './openapi/spec.js';
 import { getCacheDependencyStatus } from './services/redisCache.js';
 import { initializeForecastBatchQueueProcessing } from './services/forecastBatchQueue.js';
+import { startDigestDeliveryScheduler } from './services/digestDeliveryScheduler.js';
 
 dotenv.config();
 
@@ -221,4 +222,5 @@ app.listen(PORT, () => {
   });
 
   startNightlyForecastScheduler();
+  startDigestDeliveryScheduler();
 });
